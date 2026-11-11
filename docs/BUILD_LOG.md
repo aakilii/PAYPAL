@@ -50,3 +50,12 @@ Terms learned:
 - *heuristic* = a simple, predictable math rule (like domain age < 30 days) that scores risk consistently without needing AI.
 - *untrusted input* = data coming from an outside website or seller listing that must never be treated as system instructions.
 How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_risk_holds.py -v` or query `GET http://127.0.0.1:8000/api/holds`.
+
+## M5: Agent, injection demo, kill switch
+What I built: Created [`app/agent.py`](file:///c:/Users/Aakil/paypal/app/agent.py) connecting the shopper agent (which picks only a `product_id` and never reports prices) to the deterministic Guard, plus an intentional gullible prompt-injection mode alongside a safe-prompt comparison. Refined `mock_pick_product` in [`app/llm.py`](file:///c:/Users/Aakil/paypal/app/llm.py) so normal requests prefer verified clean listings while injection attacks pick the $199 bundle trap. Added `POST /api/agent/run`, `GET/POST /api/kill-switch`, and `GET /api/activity?since=` in [`app/main.py`](file:///c:/Users/Aakil/paypal/app/main.py), plus tests in [`tests/test_agent.py`](file:///c:/Users/Aakil/paypal/tests/test_agent.py).
+Why it matters for the project: Proves that even if a malicious seller page tricks an AI shopping agent into picking a $199 bundle, hard code limits (`OVER_ITEM_CAP`) and the emergency kill switch still protect the user's money.
+Terms learned:
+- *prompt injection* = hiding fake commands inside external text (like a product description) to trick an AI into disobeying its user.
+- *kill switch* = an emergency global toggle that immediately freezes all agent purchases regardless of any mandate.
+- *activity feed (polling)* = the browser asking `/api/activity?since=...` every 2 seconds for new ledger events so updates appear live.
+How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_agent.py -v` or `POST /api/agent/run` with `{"mandate_id": "...", "request_text": "get me a black jacket", "attack": "injection"}`.

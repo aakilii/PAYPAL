@@ -15,7 +15,12 @@ from app.config import get_settings
 
 T = TypeVar("T", bound=BaseModel)
 
-KNOWN_SELLER_SLUGS = ("thrift-shop", "vintage-vault", "cheap-jackets-now.shop")
+KNOWN_SELLER_SLUGS = (
+    "thrift-shop",
+    "vintage-vault",
+    "cheap-jackets-now.shop",
+    "flash-deals-outlet.shop",
+)
 
 STOPWORDS = frozenset(
     {
@@ -354,7 +359,7 @@ def mock_pick_product(
         tok for tok in re.findall(r"[a-z]+", lowered_req) if tok not in STOPWORDS
     ]
     best_item: dict[str, Any] | None = None
-    best_score = -1
+    best_rank: tuple[int, int, int, int, float] = (-1, -1, -1, -1, float("-inf"))
 
     for item in catalog:
         # Safe mock agent ignores hidden injection bundles unless explicitly requested.
@@ -369,12 +374,16 @@ def mock_pick_product(
             ]
         )
         overlap = sum(1 for tok in req_tokens if tok in haystack)
-        # Prefer allowed/low price match on ties
         price = float(item.get("price_usd", 9999.0))
-        if overlap > best_score or (
-            overlap == best_score and best_item is not None and price < float(best_item.get("price_usd", 9999.0))
-        ):
-            best_score = overlap
+        rank = (
+            overlap,
+            1 if item.get("seller_verified") else 0,
+            0 if ("only " in desc or "act now" in desc) else 1,
+            1 if item.get("seller") == "thrift-shop" else 0,
+            -price,
+        )
+        if rank > best_rank:
+            best_rank = rank
             best_item = item
 
     if best_item is None and catalog:
