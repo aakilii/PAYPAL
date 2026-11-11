@@ -59,3 +59,12 @@ Terms learned:
 - *kill switch* = an emergency global toggle that immediately freezes all agent purchases regardless of any mandate.
 - *activity feed (polling)* = the browser asking `/api/activity?since=...` every 2 seconds for new ledger events so updates appear live.
 How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_agent.py -v` or `POST /api/agent/run` with `{"mandate_id": "...", "request_text": "get me a black jacket", "attack": "injection"}`.
+
+## M6: PayPal
+What I built: Created [`app/paypal.py`](file:///c:/Users/Aakil/paypal/app/paypal.py) implementing PayPal OAuth2 token caching (`/v1/oauth2/token`), Orders v2 creation (`/v2/checkout/orders`) with `PayPal-Request-Id` idempotency headers and `payment_source.paypal.experience_context`, order capture (`/v2/checkout/orders/{id}/capture`), sandbox dispute reading (`/v1/customer/disputes`), and full mock-mode simulation (`MOCK-...`). Wired `/paypal/return`, `/paypal/cancel`, and `/api/orders` (with the `verified_mandate` badge check) into [`app/main.py`](file:///c:/Users/Aakil/paypal/app/main.py), logging `PAYPAL_ERROR` cleanly on any failure without leaving half-written rows. Added 4 tests in [`tests/test_paypal.py`](file:///c:/Users/Aakil/paypal/tests/test_paypal.py).
+Why it matters for the project: Connects Guard-approved purchases (and human-approved holds) directly to real PayPal Sandbox checkout & capture, while staying testable offline in mock mode.
+Terms learned:
+- *OAuth token* = a temporary access pass obtained by exchanging your app's Client ID and Secret so you don't send secrets on every API request.
+- *idempotency key (`PayPal-Request-Id`)* = a unique label attached to a payment request so network retries never charge or create the same order twice.
+- *order capture* = the final PayPal step after the buyer approves checkout that actually moves the funds and produces a capture ID.
+How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_paypal.py -v` (works in mock mode; switch `PAYPAL_MODE=sandbox` after filling Task U1 in `.env`).

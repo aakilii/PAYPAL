@@ -4,22 +4,32 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from app.agent import run as run_agent
-from app.catalog import list_public_catalog
+from app.catalog import get_product, list_public_catalog
 from app.config import get_settings
 from app.db import db_session, init_db, is_kill_switch_on, set_kill_switch_value
-from app.guard import list_holds, resolve_hold
+from app.guard import get_attempt_by_id, list_holds, resolve_hold
 from app.ledger import append_event, dev_tamper_entry, list_events, verify
 from app.mandate import (
     MandateConfirmRequest,
     MandateParseRequest,
     confirm_mandate,
     get_active_mandate,
+    get_mandate_by_id,
     parse_mandate_draft,
+)
+from app.paypal import (
+    PayPalError,
+    cancel_order_by_paypal_id,
+    capture_order_by_paypal_id,
+    create_order_for_attempt,
+    record_paypal_error,
 )
 
 
@@ -91,17 +101,35 @@ def api_get_holds(include_resolved: bool = False) -> dict[str, object]:
     return {"holds": holds}
 
 
+def _try_create_order_for_attempt(attempt: dict[str, object]) -> tuple[dict[str, object] | None, str | None]:
+    """Create a PayPal order safely; on failure roll back partial order and log PAYPAL_ERROR."""
+    attempt_id = str(attempt["id"])
+    try:
+        with db_session() as conn:
+            order = create_order_for_attempt(conn, attempt)
+            refreshed = get_attempt_by_id(conn, attempt_id)
+            if refreshed is not None:
+                attempt.update(refreshed)
+        return order, None
+    except PayPalError as exc:
+        with db_session() as err_conn:
+            record_paypal_error(err_conn, attempt_id, str(exc))
+        return None, str(exc)
+
+
 @app.post("/api/holds/{attempt_id}/approve")
 def api_approve_hold(attempt_id: str) -> dict[str, object]:
     """Human-in-the-loop approval of a HELD purchase attempt."""
     try:
         with db_session() as conn:
             attempt = resolve_hold(conn, attempt_id, "approved")
-        return {"attempt": attempt}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    order, paypal_error = _try_create_order_for_attempt(attempt)
+    return {"attempt": attempt, "order": order, "paypal_error": paypal_error}
 
 
 @app.post("/api/holds/{attempt_id}/deny")
@@ -158,7 +186,7 @@ def api_agent_run(payload: AgentRunRequest) -> dict[str, object]:
     """Have the shopper agent propose a product and run it through the Guard."""
     try:
         with db_session() as conn:
-            return run_agent(
+            result = run_agent(
                 conn,
                 mandate_id=payload.mandate_id,
                 request_text=payload.request_text,
@@ -168,6 +196,78 @@ def api_agent_run(payload: AgentRunRequest) -> dict[str, object]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    attempt = result["attempt"]
+    paypal_error = None
+    if attempt["decision"] == "APPROVED":
+        order, paypal_error = _try_create_order_for_attempt(attempt)
+        result["order"] = order
+    result["paypal_error"] = paypal_error
+    return result
+
+
+@app.get("/paypal/return")
+def paypal_return(token: str = "", PayerID: str = "") -> RedirectResponse:
+    """Handle PayPal buyer approval redirect, capture the order, and go to Merchant tab."""
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing PayPal order token.")
+    try:
+        with db_session() as conn:
+            order = capture_order_by_paypal_id(conn, token)
+        return RedirectResponse(url=f"/?tab=merchant&captured={order['id']}", status_code=303)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PayPalError as exc:
+        with db_session() as err_conn:
+            record_paypal_error(err_conn, token, str(exc))
+        return RedirectResponse(url=f"/?tab=merchant&paypal_error={quote(str(exc))}", status_code=303)
+
+
+@app.get("/paypal/cancel")
+def paypal_cancel(token: str = "") -> RedirectResponse:
+    """Handle PayPal buyer cancellation redirect cleanly."""
+    if token:
+        with db_session() as conn:
+            cancel_order_by_paypal_id(conn, token)
+    return RedirectResponse(url="/?tab=shop&paypal_cancelled=1", status_code=303)
+
+
+@app.get("/api/orders")
+def api_get_orders() -> dict[str, object]:
+    """Merchant view: list orders with verified_mandate badge status."""
+    with db_session() as conn:
+        ledger_ok = bool(verify(conn)["ok"])
+        rows = conn.execute("SELECT * FROM orders ORDER BY created_at DESC").fetchall()
+        orders: list[dict[str, object]] = []
+        for row in rows:
+            order = dict(row)
+            attempt = get_attempt_by_id(conn, order["attempt_id"])
+            mandate = get_mandate_by_id(conn, attempt["mandate_id"]) if attempt else None
+            product = get_product(attempt["product_id"]) if attempt else None
+
+            mandate_confirmed = bool(mandate and mandate.get("confirmed_at"))
+            decision_ok = bool(
+                attempt
+                and (
+                    attempt["decision"] == "APPROVED"
+                    or (attempt["decision"] == "HELD" and attempt.get("human_resolution") == "approved")
+                )
+            )
+            verified_mandate = mandate_confirmed and decision_ok and ledger_ok
+            orders.append(
+                {
+                    **order,
+                    "product_id": attempt["product_id"] if attempt else None,
+                    "product_title": product["title"] if product else None,
+                    "seller": attempt["seller"] if attempt else None,
+                    "mandate_id": attempt["mandate_id"] if attempt else None,
+                    "decision": attempt["decision"] if attempt else None,
+                    "human_resolution": attempt["human_resolution"] if attempt else None,
+                    "verified_mandate": verified_mandate,
+                    "ledger_ok": ledger_ok,
+                }
+            )
+    return {"orders": orders, "ledger_ok": ledger_ok}
 
 
 @app.get("/api/kill-switch")
