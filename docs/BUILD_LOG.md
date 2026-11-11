@@ -85,3 +85,11 @@ Terms learned:
 - *evidence packet* = the structured bundle of mandate confirmation, request text, Guard checks, PayPal IDs, and ledger verification used to answer a dispute.
 - *post-check* = validating an AI-written reply in deterministic code afterward to make sure required facts (like order ID and dollar amount) were actually included.
 How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_defender.py -v` or open the **Merchant** tab and click **Simulate dispute** -> **Build defense**.
+
+## M9: Eval and tests
+What I built: Created [`tests/eval_cases.json`](file:///c:/Users/Aakil/paypal/tests/eval_cases.json) with 24 scripted scenarios covering normal approvals (6), over item cap (4), over daily cap (2), unknown sellers (3), high-risk on allowed sellers (2), injection attacks (2), expired mandates (2), kill switch (1), and item mismatches (2). Built [`scripts/run_eval.py`](file:///c:/Users/Aakil/paypal/scripts/run_eval.py) to execute all 24 cases in clean temporary databases (plus live Gemini if `GEMINI_API_KEY` is configured) and generate [`docs/EVAL.md`](file:///c:/Users/Aakil/paypal/docs/EVAL.md) with an explicit honesty disclaimer. Added [`tests/test_eval.py`](file:///c:/Users/Aakil/paypal/tests/test_eval.py) so `pytest` verifies all 24 cases continuously.
+Why it matters for the project: Proves every deterministic Guard rule, daily cap accumulation, and seller risk boundary behaves exactly as specified across 24 reproducible cases.
+Terms learned:
+- *eval (evaluation suite)* = a fixed set of known test scenarios run automatically to verify system behavior does not regress when code changes.
+- *regression* = an old bug returning or a working rule silently breaking after a later edit.
+How to try it: Run `.venv\Scripts\python.exe scripts/run_eval.py` and read [`docs/EVAL.md`](file:///c:/Users/Aakil/paypal/docs/EVAL.md).

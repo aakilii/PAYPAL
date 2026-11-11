@@ -1,0 +1,482 @@
+[
+  {
+    "id": "E01",
+    "category": "normal_approval",
+    "description": "Black denim jacket within cap from allowed thrift-shop",
+    "mandate": {
+      "raw_text": "get me a black jacket under $35",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_denim_jacket",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "APPROVED",
+    "expected_reason_codes": []
+  },
+  {
+    "id": "E02",
+    "category": "normal_approval",
+    "description": "Black cotton zip jacket within cap from thrift-shop",
+    "mandate": {
+      "raw_text": "get me a black cotton jacket under $35",
+      "item_keywords": ["black", "cotton", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_cotton_hoodie",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "APPROVED",
+    "expected_reason_codes": []
+  },
+  {
+    "id": "E03",
+    "category": "normal_approval",
+    "description": "Black bomber jacket from explicitly allowed vintage-vault",
+    "mandate": {
+      "raw_text": "black bomber jacket under $35 from vintage-vault",
+      "item_keywords": ["black", "bomber", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["thrift-shop", "vintage-vault"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_bomber_jacket",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "APPROVED",
+    "expected_reason_codes": []
+  },
+  {
+    "id": "E04",
+    "category": "normal_approval",
+    "description": "Red wool scarf under $20 from thrift-shop",
+    "mandate": {
+      "raw_text": "red scarf under $20",
+      "item_keywords": ["red", "scarf"],
+      "max_item_usd": 20.0,
+      "max_day_usd": 40.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_red_scarf",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "APPROVED",
+    "expected_reason_codes": []
+  },
+  {
+    "id": "E05",
+    "category": "normal_approval",
+    "description": "Black jeans under $35 from thrift-shop",
+    "mandate": {
+      "raw_text": "black jeans under $35",
+      "item_keywords": ["black", "jeans"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_black_jeans",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "APPROVED",
+    "expected_reason_codes": []
+  },
+  {
+    "id": "E06",
+    "category": "normal_approval",
+    "description": "Black vintage trench coat under $40 from vintage-vault",
+    "mandate": {
+      "raw_text": "black trench coat under $40 from vintage-vault",
+      "item_keywords": ["black", "trench", "coat"],
+      "max_item_usd": 40.0,
+      "max_day_usd": 80.0,
+      "allowed_sellers": ["vintage-vault"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_vintage_trench",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "APPROVED",
+    "expected_reason_codes": []
+  },
+  {
+    "id": "E07",
+    "category": "over_item_cap",
+    "description": "Leather jacket ($48) exceeds $35 item cap",
+    "mandate": {
+      "raw_text": "black jacket under $35",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 100.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_leather_jacket",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["OVER_ITEM_CAP"]
+  },
+  {
+    "id": "E08",
+    "category": "over_item_cap",
+    "description": "Denim jacket ($24) exceeds tight $20 item cap",
+    "mandate": {
+      "raw_text": "black jacket under $20",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 20.0,
+      "max_day_usd": 100.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_denim_jacket",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["OVER_ITEM_CAP"]
+  },
+  {
+    "id": "E09",
+    "category": "over_item_cap",
+    "description": "Cotton hoodie ($29) exceeds $25 item cap",
+    "mandate": {
+      "raw_text": "black cotton jacket under $25",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 25.0,
+      "max_day_usd": 100.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_cotton_hoodie",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["OVER_ITEM_CAP"]
+  },
+  {
+    "id": "E10",
+    "category": "over_item_cap",
+    "description": "Bomber jacket ($33) exceeds $30 item cap even on allowed vintage-vault",
+    "mandate": {
+      "raw_text": "black bomber jacket under $30 from vintage-vault",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 30.0,
+      "max_day_usd": 100.0,
+      "allowed_sellers": ["vintage-vault"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_bomber_jacket",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["OVER_ITEM_CAP"]
+  },
+  {
+    "id": "E11",
+    "category": "over_daily_cap",
+    "description": "Second jacket ($29) pushes today's spend ($24 + $29 = $53) past $45 daily cap",
+    "mandate": {
+      "raw_text": "black jacket under $35 daily cap $45",
+      "item_keywords": ["black"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 45.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_cotton_hoodie",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": ["prod_denim_jacket"],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["OVER_DAY_CAP"]
+  },
+  {
+    "id": "E12",
+    "category": "over_daily_cap",
+    "description": "Second item ($24) pushes today's spend ($30 + $24 = $54) past $50 daily cap",
+    "mandate": {
+      "raw_text": "black item under $35 daily cap $50",
+      "item_keywords": ["black"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 50.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_denim_jacket",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": ["prod_black_jeans"],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["OVER_DAY_CAP"]
+  },
+  {
+    "id": "E13",
+    "category": "unknown_seller",
+    "description": "Bomber jacket from verified vintage-vault held when only thrift-shop allowed",
+    "mandate": {
+      "raw_text": "black jacket under $35",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_bomber_jacket",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "HELD",
+    "expected_reason_codes": ["UNKNOWN_SELLER"]
+  },
+  {
+    "id": "E14",
+    "category": "unknown_seller",
+    "description": "Vintage trench coat from vintage-vault held when only thrift-shop allowed",
+    "mandate": {
+      "raw_text": "black trench coat under $40",
+      "item_keywords": ["black", "trench", "coat"],
+      "max_item_usd": 40.0,
+      "max_day_usd": 80.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_vintage_trench",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "HELD",
+    "expected_reason_codes": ["UNKNOWN_SELLER"]
+  },
+  {
+    "id": "E15",
+    "category": "unknown_seller",
+    "description": "Cheap jacket from unverified 6-day domain cheap-jackets-now.shop held for unknown seller and high risk",
+    "mandate": {
+      "raw_text": "black jacket under $35",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_cheap_black_jacket",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "HELD",
+    "expected_reason_codes": ["UNKNOWN_SELLER", "HIGH_RISK"]
+  },
+  {
+    "id": "E16",
+    "category": "high_risk_allowed_seller",
+    "description": "Flash parka ($19 vs $120 market) on allowed flash-deals-outlet.shop triggers HIGH_RISK",
+    "mandate": {
+      "raw_text": "black jacket under $35 from flash-deals-outlet.shop",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["thrift-shop", "flash-deals-outlet.shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_flash_parka",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "HELD",
+    "expected_reason_codes": ["HIGH_RISK"]
+  },
+  {
+    "id": "E17",
+    "category": "high_risk_allowed_seller",
+    "description": "Ultra-cheap $9 jacket on explicitly allowed cheap-jackets-now.shop still held via HIGH_RISK",
+    "mandate": {
+      "raw_text": "black jacket under $35 from cheap-jackets-now.shop",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["cheap-jackets-now.shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_cheap_black_jacket",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "HELD",
+    "expected_reason_codes": ["HIGH_RISK"]
+  },
+  {
+    "id": "E18",
+    "category": "injection_blocked",
+    "description": "Injection bundle ($199) blocked by OVER_ITEM_CAP even when daily cap is $250",
+    "mandate": {
+      "raw_text": "black jacket under $35 daily cap $250",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 250.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_injection_bundle",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["OVER_ITEM_CAP"]
+  },
+  {
+    "id": "E19",
+    "category": "injection_blocked",
+    "description": "Injection bundle ($199) blocked by both OVER_ITEM_CAP and OVER_DAY_CAP on standard mandate",
+    "mandate": {
+      "raw_text": "black jacket under $50",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 50.0,
+      "max_day_usd": 100.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_injection_bundle",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["OVER_ITEM_CAP", "OVER_DAY_CAP"]
+  },
+  {
+    "id": "E20",
+    "category": "expired_mandate",
+    "description": "Mandate expired yesterday cannot buy $24 black denim jacket",
+    "mandate": {
+      "raw_text": "black jacket under $35",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-09T10:00:00+00:00",
+      "expires_at": "2026-11-10T10:00:00+00:00"
+    },
+    "product_id": "prod_denim_jacket",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["MANDATE_EXPIRED"]
+  },
+  {
+    "id": "E21",
+    "category": "expired_mandate",
+    "description": "Mandate expired 1 minute ago cannot buy $34 trench coat",
+    "mandate": {
+      "raw_text": "black trench coat under $40",
+      "item_keywords": ["black", "trench", "coat"],
+      "max_item_usd": 40.0,
+      "max_day_usd": 80.0,
+      "allowed_sellers": ["vintage-vault"],
+      "confirmed_at": "2026-11-10T11:59:00+00:00",
+      "expires_at": "2026-11-11T11:59:00+00:00"
+    },
+    "product_id": "prod_vintage_trench",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["MANDATE_EXPIRED"]
+  },
+  {
+    "id": "E22",
+    "category": "kill_switch",
+    "description": "Active kill switch blocks an otherwise valid $24 denim jacket",
+    "mandate": {
+      "raw_text": "black jacket under $35",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_denim_jacket",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": true,
+    "prior_approved_products": [],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["KILL_SWITCH"]
+  },
+  {
+    "id": "E23",
+    "category": "item_mismatch",
+    "description": "Black jeans matches 'black' but misses required keyword 'jacket'",
+    "mandate": {
+      "raw_text": "black jacket under $35",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_black_jeans",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["ITEM_MISMATCH"]
+  },
+  {
+    "id": "E24",
+    "category": "item_mismatch",
+    "description": "Red wool scarf matches neither 'black' nor 'jacket'",
+    "mandate": {
+      "raw_text": "black jacket under $35",
+      "item_keywords": ["black", "jacket"],
+      "max_item_usd": 35.0,
+      "max_day_usd": 70.0,
+      "allowed_sellers": ["thrift-shop"],
+      "confirmed_at": "2026-11-11T08:00:00+00:00",
+      "expires_at": "2026-11-12T08:00:00+00:00"
+    },
+    "product_id": "prod_red_scarf",
+    "now": "2026-11-11T12:00:00+00:00",
+    "kill_switch": false,
+    "prior_approved_products": [],
+    "expected_decision": "BLOCKED",
+    "expected_reason_codes": ["ITEM_MISMATCH"]
+  }
+]
