@@ -101,3 +101,11 @@ Terms learned:
 - *WCAG contrast* = ensuring text and button backgrounds have enough brightness difference to stay readable in both light and dark modes.
 - *horizontal overflow* = when content extends past the mobile viewport width, causing awkward sideways scrolling.
 How to try it: Read [`docs/LEARNING.md`](file:///c:/Users/Aakil/paypal/docs/LEARNING.md) and [`README.md`](file:///c:/Users/Aakil/paypal/README.md), or run `.venv\Scripts\python.exe -m pytest -v`.
+
+## M11: Handoff
+What I built: Updated [`docs/HANDOFF.md`](file:///c:/Users/Aakil/paypal/docs/HANDOFF.md) with exact commands to run, remaining human actions (`U1` PayPal Sandbox keys, `U2` optional Gemini key, `U3` GitHub repository remote & push), demo/submission steps, and known limitations. Performed final full-suite verification (`pytest -v` and `scripts/run_eval.py`) plus a git history secret scan confirming zero secrets were committed.
+Why it matters for the project: Ensures you have clear instructions to add your sandbox keys, push to GitHub, record the 2-minute sandbox demo, and submit cleanly before the deadline.
+Terms learned:
+- *handoff document* = a checklist summarizing finished work, remaining human tasks, exact startup commands, and honest system limitations.
+- *git tag (`v1.0`)* = a permanent milestone bookmark pointing to a specific release commit in git history.
+How to try it: Read [`docs/HANDOFF.md`](file:///c:/Users/Aakil/paypal/docs/HANDOFF.md), run `.venv\Scripts\python.exe -m pytest -v`, and start the server with `.venv\Scripts\python.exe -m uvicorn app.main:app --reload`.
