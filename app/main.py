@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from app.catalog import list_public_catalog
 from app.config import get_settings
 from app.db import db_session, init_db
+from app.guard import list_holds, resolve_hold
 from app.ledger import dev_tamper_entry, list_events, verify
 from app.mandate import (
     MandateConfirmRequest,
@@ -78,6 +79,40 @@ def api_get_active_mandate() -> dict[str, object]:
 def api_get_catalog() -> dict[str, object]:
     """Return storefront-safe product catalog."""
     return {"products": list_public_catalog()}
+
+
+@app.get("/api/holds")
+def api_get_holds(include_resolved: bool = False) -> dict[str, object]:
+    """List HELD purchase attempts waiting for human review."""
+    with db_session() as conn:
+        holds = list_holds(conn, include_resolved=include_resolved)
+    return {"holds": holds}
+
+
+@app.post("/api/holds/{attempt_id}/approve")
+def api_approve_hold(attempt_id: str) -> dict[str, object]:
+    """Human-in-the-loop approval of a HELD purchase attempt."""
+    try:
+        with db_session() as conn:
+            attempt = resolve_hold(conn, attempt_id, "approved")
+        return {"attempt": attempt}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/holds/{attempt_id}/deny")
+def api_deny_hold(attempt_id: str) -> dict[str, object]:
+    """Human-in-the-loop denial of a HELD purchase attempt."""
+    try:
+        with db_session() as conn:
+            attempt = resolve_hold(conn, attempt_id, "denied")
+        return {"attempt": attempt}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/ledger")

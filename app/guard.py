@@ -13,6 +13,7 @@ from app.config import get_settings
 from app.db import is_kill_switch_on, new_id, utc_now
 from app.ledger import append_event
 from app.mandate import get_mandate_by_id, parse_iso_datetime
+from app.risk import evaluate_risk
 
 BLOCKING_CODES = frozenset(
     {
@@ -26,11 +27,6 @@ BLOCKING_CODES = frozenset(
 )
 
 RiskEvaluator = Callable[[dict[str, Any]], dict[str, Any]]
-
-
-def _default_heuristic_only_risk(product: dict[str, Any]) -> dict[str, Any]:
-    """Fallback risk evaluator before M4 risk module is wired."""
-    return {"score": 0.0, "reasons": ["Risk module not wired; default score 0.0."]}
 
 
 def _todays_approved_spend(
@@ -242,7 +238,7 @@ def evaluate_purchase(
             }
         )
     else:
-        evaluator = risk_evaluator or _default_heuristic_only_risk
+        evaluator = risk_evaluator or evaluate_risk
         risk_res = evaluator(product)
         risk_score = float(risk_res.get("score", 0.0))
         risk_reasons = [str(r) for r in risk_res.get("reasons", [])]
@@ -333,3 +329,102 @@ def evaluate_purchase(
         "status": "decided",
         "created_at": now_iso,
     }
+
+
+def _row_to_attempt(row: sqlite3.Row) -> dict[str, Any]:
+    product = get_product(row["product_id"])
+    return {
+        "id": row["id"],
+        "mandate_id": row["mandate_id"],
+        "product_id": row["product_id"],
+        "product_title": product["title"] if product else row["product_id"],
+        "seller": row["seller"],
+        "price_usd": float(row["price_usd"]),
+        "decision": row["decision"],
+        "reason_codes": json.loads(row["reason_codes"]),
+        "checks": json.loads(row["checks"]),
+        "risk_score": float(row["risk_score"]),
+        "risk_reasons": json.loads(row["risk_reasons"]),
+        "human_resolution": row["human_resolution"],
+        "status": row["status"],
+        "created_at": row["created_at"],
+    }
+
+
+def get_attempt_by_id(conn: sqlite3.Connection, attempt_id: str) -> dict[str, Any] | None:
+    """Fetch a purchase attempt by ID."""
+    row = conn.execute("SELECT * FROM attempts WHERE id = ?", (attempt_id,)).fetchone()
+    return _row_to_attempt(row) if row is not None else None
+
+
+def list_holds(conn: sqlite3.Connection, include_resolved: bool = False) -> list[dict[str, Any]]:
+    """Return HELD purchase attempts awaiting human review (or all HELD attempts)."""
+    if include_resolved:
+        rows = conn.execute(
+            "SELECT * FROM attempts WHERE decision = 'HELD' ORDER BY created_at DESC"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT * FROM attempts
+            WHERE decision = 'HELD' AND human_resolution IS NULL
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+    return [_row_to_attempt(row) for row in rows]
+
+
+def resolve_hold(
+    conn: sqlite3.Connection,
+    attempt_id: str,
+    resolution: str,
+) -> dict[str, Any]:
+    """Record a human approve or deny decision on a HELD purchase attempt."""
+    if resolution not in ("approved", "denied"):
+        raise ValueError(f"Resolution must be 'approved' or 'denied', got '{resolution}'.")
+
+    attempt = get_attempt_by_id(conn, attempt_id)
+    if attempt is None:
+        raise KeyError(f"Attempt '{attempt_id}' not found.")
+    if attempt["decision"] != "HELD":
+        raise ValueError(f"Attempt '{attempt_id}' is '{attempt['decision']}', not HELD.")
+    if attempt["human_resolution"] is not None:
+        raise ValueError(f"Attempt '{attempt_id}' was already resolved as '{attempt['human_resolution']}'.")
+
+    if resolution == "approved":
+        if is_kill_switch_on(conn):
+            raise ValueError("Kill switch is ON; unfreeze the agent before approving held purchases.")
+        mandate = get_mandate_by_id(conn, attempt["mandate_id"])
+        if mandate is not None:
+            now_dt = utc_now()
+            spent_today = _todays_approved_spend(conn, attempt["mandate_id"], now_dt)
+            if round(spent_today + float(attempt["price_usd"]), 2) > float(mandate["max_day_usd"]):
+                raise ValueError(
+                    f"Approving ${attempt['price_usd']:.2f} would exceed daily cap ${mandate['max_day_usd']:.2f}."
+                )
+
+    new_status = "decided" if resolution == "approved" else "denied"
+    conn.execute(
+        "UPDATE attempts SET human_resolution = ?, status = ? WHERE id = ?",
+        (resolution, new_status, attempt_id),
+    )
+
+    resolved_ts = utc_now().isoformat()
+    append_event(
+        conn,
+        event_type="HUMAN_RESOLVED",
+        ref_id=attempt_id,
+        body={
+            "attempt_id": attempt_id,
+            "mandate_id": attempt["mandate_id"],
+            "product_id": attempt["product_id"],
+            "seller": attempt["seller"],
+            "price_usd": attempt["price_usd"],
+            "resolution": resolution,
+        },
+        ts=resolved_ts,
+    )
+
+    updated = get_attempt_by_id(conn, attempt_id)
+    assert updated is not None
+    return updated

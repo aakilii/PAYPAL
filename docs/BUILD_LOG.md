@@ -41,3 +41,12 @@ Terms learned:
 - *decision precedence* = strict priority order where any hard `BLOCKED` rule overrides `HELD`, and `APPROVED` only happens when every check passes.
 - *allowlist* = an explicit list of approved sellers (`allowed_sellers`) used to hold unknown shops for human review.
 How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_guard.py -v` or `GET http://127.0.0.1:8000/api/catalog`.
+
+## M4: Risk and holds
+What I built: Created [`app/risk.py`](file:///c:/Users/Aakil/paypal/app/risk.py) combining a deterministic seller-risk heuristic (new domain under 30 days +0.30, price below 40% of market value +0.25, urgency/injection text +0.15, unverified seller +0.15) with live Gemini risk scoring (taking the higher score). Wired `evaluate_risk` into [`app/guard.py`](file:///c:/Users/Aakil/paypal/app/guard.py) and added human-in-the-loop resolution helpers (`list_holds`, `resolve_hold`) that enforce daily caps and append `HUMAN_RESOLVED` to the ledger. Added `GET /api/holds`, `POST /api/holds/{attempt_id}/approve`, and `POST /api/holds/{attempt_id}/deny` in [`app/main.py`](file:///c:/Users/Aakil/paypal/app/main.py) plus tests in [`tests/test_risk_holds.py`](file:///c:/Users/Aakil/paypal/tests/test_risk_holds.py).
+Why it matters for the project: Keeps suspicious sellers or abnormally cheap listings from spending money automatically, pausing them for a human to review and approve or deny with full reasons.
+Terms learned:
+- *human-in-the-loop* = pausing an automated action so a real person makes the final approve/deny call before money moves.
+- *heuristic* = a simple, predictable math rule (like domain age < 30 days) that scores risk consistently without needing AI.
+- *untrusted input* = data coming from an outside website or seller listing that must never be treated as system instructions.
+How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_risk_holds.py -v` or query `GET http://127.0.0.1:8000/api/holds`.
