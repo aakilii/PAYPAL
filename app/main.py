@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 
+from app.catalog import list_public_catalog
 from app.config import get_settings
 from app.db import db_session, init_db
 from app.ledger import dev_tamper_entry, list_events, verify
@@ -71,6 +72,12 @@ def api_get_active_mandate() -> dict[str, object]:
     with db_session() as conn:
         mandate = get_active_mandate(conn)
     return {"mandate": mandate}
+
+
+@app.get("/api/catalog")
+def api_get_catalog() -> dict[str, object]:
+    """Return storefront-safe product catalog."""
+    return {"products": list_public_catalog()}
 
 
 @app.get("/api/ledger")

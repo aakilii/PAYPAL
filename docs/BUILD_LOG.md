@@ -31,3 +31,13 @@ Terms learned:
 - *schema validation (Pydantic)* = checking that AI JSON output has the exact field names and number/string types our code expects before trusting it.
 - *assumptions* = default limits the parser filled in automatically when the user left them out, shown clearly so the user can edit them before confirming.
 How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_mandate.py -v` or `POST /api/mandates/parse` with `{"text": "get me a black jacket under $35"}`.
+
+## M3: Catalog and guard
+What I built: Created [`data/catalog.json`](file:///c:/Users/Aakil/paypal/data/catalog.json) with 12 products across four sellers (trusted stores, a brand-new unverified domain, and a listing carrying a hidden prompt-injection attack) and [`app/catalog.py`](file:///c:/Users/Aakil/paypal/app/catalog.py) to load authoritative prices and seller metadata. Built [`app/guard.py`](file:///c:/Users/Aakil/paypal/app/guard.py) implementing all eight deterministic rule checks (`KILL_SWITCH`, `MANDATE_INACTIVE`, `MANDATE_EXPIRED`, `OVER_ITEM_CAP`, `OVER_DAY_CAP`, `ITEM_MISMATCH`, `UNKNOWN_SELLER`, `HIGH_RISK`), strict precedence (`BLOCKED` > `HELD` > `APPROVED`), and the cost-saving rule that skips AI risk checks when already blocked. Added `GET /api/catalog` to [`app/main.py`](file:///c:/Users/Aakil/paypal/app/main.py) and 10 tests in [`tests/test_guard.py`](file:///c:/Users/Aakil/paypal/tests/test_guard.py).
+Why it matters for the project: Guarantees the AI agent can never lie about prices or sellers and can never talk its way past hard spending limits, because deterministic code enforces the rules from catalog ground truth.
+Terms learned:
+- *guard* = deterministic Python rule checks that verify every purchase before any money moves.
+- *authoritative source (ground truth)* = loading the real price and seller directly from `catalog.json` rather than trusting whatever an AI agent claims.
+- *decision precedence* = strict priority order where any hard `BLOCKED` rule overrides `HELD`, and `APPROVED` only happens when every check passes.
+- *allowlist* = an explicit list of approved sellers (`allowed_sellers`) used to hold unknown shops for human review.
+How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_guard.py -v` or `GET http://127.0.0.1:8000/api/catalog`.
