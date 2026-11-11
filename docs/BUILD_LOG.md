@@ -76,3 +76,12 @@ Terms learned:
 - *CSS variables & `prefers-color-scheme`* = reusable color tokens in CSS that automatically switch between light and dark themes based on the user's operating system setting.
 - *XSS escaping (`escapeHtml`)* = turning `<` and `>` into safe text before rendering user or seller strings into HTML so untrusted text can never run scripts in the browser.
 How to try it: Start `uvicorn app.main:app --reload` and open `http://127.0.0.1:8000/` in your browser.
+
+## M8: Dispute defender and merchant view
+What I built: Created [`app/defender.py`](file:///c:/Users/Aakil/paypal/app/defender.py) which constructs dispute evidence packets strictly from immutable ledger events, assigns evidence strength (`STRONG`, `WEAK`, or `NO_RECORD`), and drafts factual merchant replies with a strict post-check ensuring order ID, amount, and "should not contest" guidance are never omitted. Wired `/api/disputes/simulate`, `/api/disputes`, and `/api/disputes/{id}/defend` into [`app/main.py`](file:///c:/Users/Aakil/paypal/app/main.py), updated [`static/app.js`](file:///c:/Users/Aakil/paypal/static/app.js) to auto-sync sandbox disputes when `PAYPAL_MODE=sandbox`, and added 4 comprehensive tests in [`tests/test_defender.py`](file:///c:/Users/Aakil/paypal/tests/test_defender.py).
+Why it matters for the project: Solves the second core problem—giving merchants verifiable proof from the ledger to fight friendly fraud when evidence is strong, and telling them honestly not to contest when proof is missing or tampered.
+Terms learned:
+- *friendly fraud* = when a customer makes or approves a purchase and later files a dispute claiming they never authorized it.
+- *evidence packet* = the structured bundle of mandate confirmation, request text, Guard checks, PayPal IDs, and ledger verification used to answer a dispute.
+- *post-check* = validating an AI-written reply in deterministic code afterward to make sure required facts (like order ID and dollar amount) were actually included.
+How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_defender.py -v` or open the **Merchant** tab and click **Simulate dispute** -> **Build defense**.

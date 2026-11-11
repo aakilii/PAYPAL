@@ -16,6 +16,7 @@ from app.agent import run as run_agent
 from app.catalog import get_product, list_public_catalog
 from app.config import get_settings
 from app.db import db_session, init_db, is_kill_switch_on, set_kill_switch_value
+from app.defender import defend_dispute, list_disputes, simulate_dispute
 from app.guard import get_attempt_by_id, list_holds, resolve_hold
 from app.ledger import append_event, dev_tamper_entry, list_events, verify
 from app.mandate import (
@@ -279,6 +280,38 @@ def api_get_orders() -> dict[str, object]:
                 }
             )
     return {"orders": orders, "ledger_ok": ledger_ok}
+
+
+class DisputeSimulateRequest(BaseModel):
+    order_id: str = Field(min_length=1)
+    claim: str = Field(default="I did not authorize this AI purchase.", min_length=1, max_length=400)
+
+
+@app.post("/api/disputes/simulate")
+def api_simulate_dispute(payload: DisputeSimulateRequest) -> dict[str, object]:
+    """Create a simulated PayPal-shaped dispute and log DISPUTE_RECEIVED."""
+    with db_session() as conn:
+        dispute = simulate_dispute(conn, order_id=payload.order_id, claim=payload.claim)
+    return {"dispute": dispute}
+
+
+@app.get("/api/disputes")
+def api_get_disputes(sync_paypal: bool = False) -> dict[str, object]:
+    """Return disputes, optionally checking PayPal Sandbox Customer Disputes API."""
+    with db_session() as conn:
+        disputes, sync_note = list_disputes(conn, sync_paypal=sync_paypal)
+    return {"disputes": disputes, "sync_note": sync_note}
+
+
+@app.post("/api/disputes/{dispute_id}/defend")
+def api_defend_dispute(dispute_id: str) -> dict[str, object]:
+    """Build ledger-only evidence packet and draft factual merchant defense reply."""
+    try:
+        with db_session() as conn:
+            dispute = defend_dispute(conn, dispute_id)
+        return {"dispute": dispute}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/api/kill-switch")

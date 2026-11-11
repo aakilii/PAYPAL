@@ -450,7 +450,8 @@ async function loadMerchant() {
 async function loadDisputes() {
   const disputesEl = document.getElementById("disputes-list");
   try {
-    const res = await fetch("/api/disputes");
+    const syncParam = state.config && state.config.paypal_mode === "sandbox" ? "?sync_paypal=true" : "";
+    const res = await fetch(`/api/disputes${syncParam}`);
     if (res.status === 404) {
       state.disputesAvailable = false;
       return;
