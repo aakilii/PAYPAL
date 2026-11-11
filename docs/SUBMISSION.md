@@ -23,7 +23,7 @@ AI shopping agents are moving quickly toward autonomous checkout—63% of mercha
 - Designing safe dual-mode switches (`LLM_MODE=mock|gemini` and `PAYPAL_MODE=mock|sandbox`) so every workflow is reproducible offline and testable against real PayPal Sandbox checkout.
 
 ## Accomplishments That We're Proud Of
-- All 24 scripted evaluation cases in `tests/eval_cases.json` pass (`docs/EVAL.md`), alongside 38 unit and API integration tests.
+- All 24 scripted evaluation cases in `tests/eval_cases.json` pass (`docs/EVAL.md`), alongside 39 unit and API integration tests.
 - Clean zero-framework responsive dashboard supporting light/dark mode, live 2s ledger activity polling, human approve/deny queue, Verified Mandate merchant badges, and a one-click ledger tamper demo.
 - Honest labeling of every real vs. simulated boundary in both the UI and docs.
 

@@ -96,13 +96,21 @@ python scripts/run_eval.py
 
 ---
 
-## Tech Stack
+## Tech Stack & Integrations
 
 - **Backend:** Python 3.11+, FastAPI, Uvicorn, HTTPX, Pydantic, Python `dotenv`, SQLite (`sqlite3`)
-- **AI:** Google Gemini via `google-genai` SDK (`GEMINI_MODEL` configurable, single wrapper in `app/llm.py`)
-- **Payments:** PayPal Sandbox REST API (OAuth2, Orders v2 create & capture, Customer Disputes v1)
+- **AI (`app/llm.py`):** Google Gemini via `google-genai` SDK (`GEMINI_MODEL` configurable, e.g., `gemini-3.8-flash`) with Pydantic JSON schema validation, retry, and deterministic offline mock fallbacks (`LLM_MODE=mock|gemini`)
+  - Parses plain-English requests into structured mandates
+  - Scores untrusted seller listing text alongside deterministic risk heuristics
+  - Drives the shopper agent (`none` safe mode vs. gullible `injection` attack simulation)
+  - Drafts factual merchant dispute replies grounded strictly in ledger records
+- **Payments (`app/paypal.py`):** PayPal Sandbox REST API (`https://api-m.sandbox.paypal.com`)
+  - OAuth 2.0 client-credentials token exchange & caching (`POST /v1/oauth2/token`)
+  - Orders v2 creation (`POST /v2/checkout/orders` with `PayPal-Request-Id` idempotency keys and `payment_source.paypal.experience_context`) and capture on return (`POST /v2/checkout/orders/{id}/capture`)
+  - Customer Disputes v1 read (`GET /v1/customer/disputes`, falling back to clearly labeled simulated disputes when empty)
+- **Hosting / Deployment:** Render Web Service Blueprint ([`render.yaml`](render.yaml), [`Procfile`](Procfile)) serving both API routes and static UI from one container
 - **Frontend:** Plain HTML, CSS (variables + light/dark `prefers-color-scheme`), and vanilla JavaScript
-- **Testing & Eval:** Pytest + 24-case scripted evaluation (`scripts/run_eval.py`, results in `docs/EVAL.md`)
+- **Testing & Eval:** Pytest (39 tests) + 24-case scripted evaluation (`scripts/run_eval.py`, results in [`docs/EVAL.md`](docs/EVAL.md))
 
 ---
 
