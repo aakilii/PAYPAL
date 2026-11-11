@@ -93,3 +93,11 @@ Terms learned:
 - *eval (evaluation suite)* = a fixed set of known test scenarios run automatically to verify system behavior does not regress when code changes.
 - *regression* = an old bug returning or a working rule silently breaking after a later edit.
 How to try it: Run `.venv\Scripts\python.exe scripts/run_eval.py` and read [`docs/EVAL.md`](file:///c:/Users/Aakil/paypal/docs/EVAL.md).
+
+## M10: Documentation and polish
+What I built: Verified the live UI in headless Chrome across light mode, dark mode, mobile width (`390px`, zero horizontal overflow), keyboard focus, and zero console/page errors, tuning dark-mode button contrast in [`static/style.css`](file:///c:/Users/Aakil/paypal/static/style.css) and saving 6 screenshots into `docs/img/`. Wrote complete documentation across [`README.md`](file:///c:/Users/Aakil/paypal/README.md), [`docs/ARCHITECTURE.md`](file:///c:/Users/Aakil/paypal/docs/ARCHITECTURE.md), [`docs/LEARNING.md`](file:///c:/Users/Aakil/paypal/docs/LEARNING.md), [`docs/DEMO_SCRIPT.md`](file:///c:/Users/Aakil/paypal/docs/DEMO_SCRIPT.md), and [`docs/SUBMISSION.md`](file:///c:/Users/Aakil/paypal/docs/SUBMISSION.md) using only sourced statistics and honest real-vs-simulated disclosures.
+Why it matters for the project: Makes the codebase easy for a starting engineer to study end-to-end and ready for judges and Devpost submission.
+Terms learned:
+- *WCAG contrast* = ensuring text and button backgrounds have enough brightness difference to stay readable in both light and dark modes.
+- *horizontal overflow* = when content extends past the mobile viewport width, causing awkward sideways scrolling.
+How to try it: Read [`docs/LEARNING.md`](file:///c:/Users/Aakil/paypal/docs/LEARNING.md) and [`README.md`](file:///c:/Users/Aakil/paypal/README.md), or run `.venv\Scripts\python.exe -m pytest -v`.

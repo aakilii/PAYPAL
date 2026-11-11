@@ -14,6 +14,9 @@
   --warn-bg: #fef3c7;
   --danger: #b91c1c;
   --danger-bg: #fee2e2;
+  --btn-primary: #005ea6;
+  --btn-ok: #0f766e;
+  --btn-danger: #b91c1c;
   --focus-ring: #2563eb;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -38,6 +41,9 @@
     --warn-bg: #451a03;
     --danger: #f87171;
     --danger-bg: #450a0a;
+    --btn-primary: #0369a1;
+    --btn-ok: #047857;
+    --btn-danger: #dc2626;
     --focus-ring: #60a5fa;
     --shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   }
@@ -138,7 +144,7 @@ body {
 }
 
 .kill-banner {
-  background: var(--danger);
+  background: var(--btn-danger);
   color: #ffffff;
   text-align: center;
   padding: 0.55rem 1rem;
@@ -178,7 +184,7 @@ body {
 }
 
 .tab-btn[aria-selected="true"] {
-  background: var(--accent);
+  background: var(--btn-primary);
   color: #ffffff;
 }
 
@@ -304,21 +310,21 @@ button:hover,
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--btn-primary);
   color: #ffffff;
-  border-color: var(--accent);
+  border-color: var(--btn-primary);
 }
 
 .btn-danger {
-  background: var(--danger);
+  background: var(--btn-danger);
   color: #ffffff;
-  border-color: var(--danger);
+  border-color: var(--btn-danger);
 }
 
 .btn-ok {
-  background: var(--ok);
+  background: var(--btn-ok);
   color: #ffffff;
-  border-color: var(--ok);
+  border-color: var(--btn-ok);
 }
 
 .btn-group {
