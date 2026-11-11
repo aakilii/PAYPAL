@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.agent import run as run_agent
@@ -47,6 +49,15 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/")
+def serve_index() -> FileResponse:
+    """Serve the single-page web UI."""
+    return FileResponse(str(STATIC_DIR / "index.html"))
 
 
 @app.get("/health")

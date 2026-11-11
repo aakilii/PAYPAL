@@ -68,3 +68,11 @@ Terms learned:
 - *idempotency key (`PayPal-Request-Id`)* = a unique label attached to a payment request so network retries never charge or create the same order twice.
 - *order capture* = the final PayPal step after the buyer approves checkout that actually moves the funds and produces a capture ID.
 How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_paypal.py -v` (works in mock mode; switch `PAYPAL_MODE=sandbox` after filling Task U1 in `.env`).
+
+## M7: Frontend
+What I built: Created [`static/index.html`](file:///c:/Users/Aakil/paypal/static/index.html), [`static/style.css`](file:///c:/Users/Aakil/paypal/static/style.css), and [`static/app.js`](file:///c:/Users/Aakil/paypal/static/app.js) with zero build tools or frameworks. Built the responsive four-tab UI (`Shop`, `Approvals`, `Merchant`, `Ledger`) supporting automatic light/dark mode, visible keyboard focus, live mode badges, the global Kill Switch banner, editable parsed mandates with `Assumed` pills, all four agent demo scenarios, a 2-second polling live activity feed, human approve/deny controls, and the Ledger verify/tamper demo. Mounted `/static` and `/` in [`app/main.py`](file:///c:/Users/Aakil/paypal/app/main.py) and added [`tests/test_ui.py`](file:///c:/Users/Aakil/paypal/tests/test_ui.py).
+Why it matters for the project: Gives users, judges, and merchants an interactive dashboard to drive every scenario, watch the Guard block injection attacks, approve PayPal orders, and verify the hash chain visually.
+Terms learned:
+- *CSS variables & `prefers-color-scheme`* = reusable color tokens in CSS that automatically switch between light and dark themes based on the user's operating system setting.
+- *XSS escaping (`escapeHtml`)* = turning `<` and `>` into safe text before rendering user or seller strings into HTML so untrusted text can never run scripts in the browser.
+How to try it: Start `uvicorn app.main:app --reload` and open `http://127.0.0.1:8000/` in your browser.
