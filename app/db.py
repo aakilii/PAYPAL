@@ -102,11 +102,12 @@ def resolve_db_path(db_path: str | None = None) -> str:
 
 
 def get_connection(db_path: str | None = None) -> sqlite3.Connection:
-    """Open a SQLite connection configured with Row factory and foreign keys."""
+    """Open a SQLite connection configured with Row factory, foreign keys, and busy timeout."""
     path = resolve_db_path(db_path)
-    conn = sqlite3.connect(path, check_same_thread=False)
+    conn = sqlite3.connect(path, timeout=10.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
+    conn.execute("PRAGMA busy_timeout = 5000;")
     return conn
 
 
@@ -126,7 +127,10 @@ def db_session(db_path: str | None = None) -> Iterator[sqlite3.Connection]:
 
 def init_db(db_path: str | None = None) -> None:
     """Create all tables and default settings if they do not exist yet."""
-    with db_session(db_path) as conn:
+    path = resolve_db_path(db_path)
+    with db_session(path) as conn:
+        if path != ":memory:":
+            conn.execute("PRAGMA journal_mode = WAL;")
         conn.executescript(SCHEMA_SQL)
         conn.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES ('kill_switch', 'false')"

@@ -406,7 +406,7 @@ async function loadMerchant() {
             : `<span class="badge badge-danger">Unverified / Tampered</span>`;
           const sourceBadge = `<span class="badge">${escapeHtml(o.source)}</span>`;
           const actionCell =
-            o.status === "CREATED" && o.approval_url
+            (o.status === "CREATED" || o.status === "PAYER_ACTION_REQUIRED") && o.approval_url
               ? `<a class="btn-link btn-primary" href="${escapeHtml(o.approval_url)}">Approve in PayPal</a>`
               : `<span class="mono">${escapeHtml(o.capture_id || "—")}</span>`;
           return `

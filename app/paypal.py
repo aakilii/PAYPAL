@@ -112,9 +112,11 @@ def create_order_for_attempt(
     conn: sqlite3.Connection,
     attempt: dict[str, Any],
     http_client: httpx.Client | None = None,
+    base_url_override: str | None = None,
 ) -> dict[str, Any]:
     """Create a PayPal order (mock or sandbox) for an approved or human-approved attempt."""
     settings = get_settings()
+    callback_base = (base_url_override or settings.app_base_url).rstrip("/")
     attempt_id = str(attempt["id"])
     amount_usd = round(float(attempt["price_usd"]), 2)
 
@@ -128,7 +130,7 @@ def create_order_for_attempt(
 
     if settings.paypal_mode == "mock":
         paypal_order_id = f"MOCK-{uuid.uuid4().hex[:6].upper()}"
-        approval_url = f"{settings.app_base_url}/paypal/return?token={paypal_order_id}&PayerID=MOCKBUYER"
+        approval_url = f"{callback_base}/paypal/return?token={paypal_order_id}&PayerID=MOCKBUYER"
         order_status = "CREATED"
         source = "mock"
     else:
@@ -152,8 +154,8 @@ def create_order_for_attempt(
                         "brand_name": "Mandate Demo",
                         "shipping_preference": "NO_SHIPPING",
                         "user_action": "PAY_NOW",
-                        "return_url": f"{settings.app_base_url}/paypal/return",
-                        "cancel_url": f"{settings.app_base_url}/paypal/cancel",
+                        "return_url": f"{callback_base}/paypal/return",
+                        "cancel_url": f"{callback_base}/paypal/cancel",
                     }
                 }
             },
@@ -317,14 +319,14 @@ def capture_order_by_paypal_id(
 
 
 def cancel_order_by_paypal_id(conn: sqlite3.Connection, paypal_order_id: str) -> dict[str, Any] | None:
-    """Mark a CREATED order as CANCELLED when the buyer cancels at PayPal checkout."""
+    """Mark a pending order (CREATED or PAYER_ACTION_REQUIRED) as CANCELLED."""
     row = conn.execute(
         "SELECT * FROM orders WHERE paypal_order_id = ?",
         (paypal_order_id,),
     ).fetchone()
     if row is None:
         return None
-    if row["status"] == "CREATED":
+    if row["status"] in ("CREATED", "PAYER_ACTION_REQUIRED"):
         conn.execute(
             "UPDATE orders SET status = 'CANCELLED' WHERE id = ?",
             (row["id"],),

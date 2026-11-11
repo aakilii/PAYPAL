@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -113,12 +114,29 @@ def api_get_holds(include_resolved: bool = False) -> dict[str, object]:
     return {"holds": holds}
 
 
-def _try_create_order_for_attempt(attempt: dict[str, object]) -> tuple[dict[str, object] | None, str | None]:
+def _resolve_callback_base_url(request: Request) -> str:
+    """Use configured APP_BASE_URL when non-local, or derive public host from reverse proxy headers."""
+    configured = (os.getenv("APP_BASE_URL") or "").strip().rstrip("/")
+    is_local_cfg = not configured or "127.0.0.1" in configured or "localhost" in configured
+    if not is_local_cfg:
+        return configured
+
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
+    proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "http").split(",")[0].strip()
+    if host and not host.startswith(("127.0.0.1", "localhost", "testserver")):
+        return f"{proto}://{host}".rstrip("/")
+    return get_settings().app_base_url
+
+
+def _try_create_order_for_attempt(
+    attempt: dict[str, object],
+    base_url_override: str | None = None,
+) -> tuple[dict[str, object] | None, str | None]:
     """Create a PayPal order safely; on failure roll back partial order and log PAYPAL_ERROR."""
     attempt_id = str(attempt["id"])
     try:
         with db_session() as conn:
-            order = create_order_for_attempt(conn, attempt)
+            order = create_order_for_attempt(conn, attempt, base_url_override=base_url_override)
             refreshed = get_attempt_by_id(conn, attempt_id)
             if refreshed is not None:
                 attempt.update(refreshed)
@@ -130,7 +148,7 @@ def _try_create_order_for_attempt(attempt: dict[str, object]) -> tuple[dict[str,
 
 
 @app.post("/api/holds/{attempt_id}/approve")
-def api_approve_hold(attempt_id: str) -> dict[str, object]:
+def api_approve_hold(attempt_id: str, request: Request) -> dict[str, object]:
     """Human-in-the-loop approval of a HELD purchase attempt."""
     try:
         with db_session() as conn:
@@ -140,7 +158,7 @@ def api_approve_hold(attempt_id: str) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    order, paypal_error = _try_create_order_for_attempt(attempt)
+    order, paypal_error = _try_create_order_for_attempt(attempt, _resolve_callback_base_url(request))
     return {"attempt": attempt, "order": order, "paypal_error": paypal_error}
 
 
@@ -194,7 +212,7 @@ def _summarize_event(event: dict[str, object]) -> str:
 
 
 @app.post("/api/agent/run")
-def api_agent_run(payload: AgentRunRequest) -> dict[str, object]:
+def api_agent_run(payload: AgentRunRequest, request: Request) -> dict[str, object]:
     """Have the shopper agent propose a product and run it through the Guard."""
     try:
         with db_session() as conn:
@@ -212,7 +230,7 @@ def api_agent_run(payload: AgentRunRequest) -> dict[str, object]:
     attempt = result["attempt"]
     paypal_error = None
     if attempt["decision"] == "APPROVED":
-        order, paypal_error = _try_create_order_for_attempt(attempt)
+        order, paypal_error = _try_create_order_for_attempt(attempt, _resolve_callback_base_url(request))
         result["order"] = order
     result["paypal_error"] = paypal_error
     return result

@@ -223,3 +223,38 @@ def test_sandbox_missing_credentials_records_paypal_error_cleanly(
             events = list_events(conn)
             assert any(e["type"] == "PAYPAL_ERROR" for e in events)
             assert verify(conn)["ok"] is True
+
+
+def test_proxy_headers_resolve_callback_url_and_cancel_payer_action_required(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_file = str(tmp_path / "proxy.db")
+    monkeypatch.setenv("DB_PATH", db_file)
+    monkeypatch.setenv("PAYPAL_MODE", "mock")
+    monkeypatch.setenv("APP_BASE_URL", "http://127.0.0.1:8000")
+
+    with TestClient(app) as client:
+        mandate = _setup_mandate(client)
+        res = client.post(
+            "/api/agent/run",
+            headers={
+                "X-Forwarded-Proto": "https",
+                "X-Forwarded-Host": "mandate-demo.onrender.com",
+            },
+            json={
+                "mandate_id": mandate["id"],
+                "request_text": "get me a black denim jacket",
+                "attack": "none",
+            },
+        ).json()
+        order = res["order"]
+        assert order["approval_url"].startswith("https://mandate-demo.onrender.com/paypal/return?")
+
+        with db_session(db_file) as conn:
+            conn.execute(
+                "UPDATE orders SET status = 'PAYER_ACTION_REQUIRED' WHERE id = ?",
+                (order["id"],),
+            )
+        client.get(f"/paypal/cancel?token={order['paypal_order_id']}", follow_redirects=False)
+        orders = client.get("/api/orders").json()["orders"]
+        assert orders[0]["status"] == "CANCELLED"
