@@ -12,7 +12,7 @@ services:
       - key: LLM_MODE
         value: mock
       - key: GEMINI_API_KEY
-        sync: false
+        value: ""
       - key: GEMINI_MODEL
         value: gemini-3.8-flash
       - key: PAYPAL_MODE
@@ -24,7 +24,7 @@ services:
       - key: PAYPAL_CLIENT_SECRET
         sync: false
       - key: APP_BASE_URL
-        sync: false
+        value: ""
       - key: RISK_THRESHOLD
         value: "0.7"
       - key: DEV_MODE
