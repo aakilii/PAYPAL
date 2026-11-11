@@ -110,7 +110,7 @@ python scripts/run_eval.py
   - Customer Disputes v1 read (`GET /v1/customer/disputes`, falling back to clearly labeled simulated disputes when empty)
 - **Hosting / Deployment:** Render Web Service Blueprint ([`render.yaml`](render.yaml), [`Procfile`](Procfile)) serving both API routes and static UI from one container
 - **Frontend:** Plain HTML, CSS (variables + light/dark `prefers-color-scheme`), and vanilla JavaScript
-- **Testing & Eval:** Pytest (39 tests) + 24-case scripted evaluation (`scripts/run_eval.py`, results in [`docs/EVAL.md`](docs/EVAL.md))
+- **Testing & Eval:** Pytest (43 tests) + 24-case scripted evaluation (`scripts/run_eval.py`, results in [`docs/EVAL.md`](docs/EVAL.md))
 
 ---
 
