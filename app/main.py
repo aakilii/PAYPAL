@@ -10,6 +10,13 @@ from fastapi import FastAPI, HTTPException
 from app.config import get_settings
 from app.db import db_session, init_db
 from app.ledger import dev_tamper_entry, list_events, verify
+from app.mandate import (
+    MandateConfirmRequest,
+    MandateParseRequest,
+    confirm_mandate,
+    get_active_mandate,
+    parse_mandate_draft,
+)
 
 
 @asynccontextmanager
@@ -38,6 +45,32 @@ def health() -> dict[str, str]:
 def api_config() -> dict[str, object]:
     """Return non-secret runtime settings for the UI."""
     return get_settings().to_public_dict()
+
+
+@app.post("/api/mandates/parse")
+def api_parse_mandate(payload: MandateParseRequest) -> dict[str, object]:
+    """Parse plain-English text into an unconfirmed draft mandate with assumptions."""
+    try:
+        draft = parse_mandate_draft(payload.text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return draft.model_dump()
+
+
+@app.post("/api/mandates")
+def api_confirm_mandate(payload: MandateConfirmRequest) -> dict[str, object]:
+    """Confirm and save a mandate, recording MANDATE_CONFIRMED in the ledger."""
+    with db_session() as conn:
+        mandate = confirm_mandate(conn, payload)
+    return {"mandate": mandate}
+
+
+@app.get("/api/mandates/active")
+def api_get_active_mandate() -> dict[str, object]:
+    """Return the current active confirmed mandate, if one exists."""
+    with db_session() as conn:
+        mandate = get_active_mandate(conn)
+    return {"mandate": mandate}
 
 
 @app.get("/api/ledger")

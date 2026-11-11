@@ -21,3 +21,13 @@ Terms learned:
 - *hash chain* = linking every ledger entry to the previous entry's hash so editing an old entry breaks every entry after it.
 - *tamper-evident* = a system that makes tampering immediately visible when verified (distinct from *tamper-proof*, which prevents editing completely).
 How to try it: Run `.venv\Scripts\python.exe -m pytest -v` (8 tests passing) or visit `http://127.0.0.1:8000/api/ledger/verify`.
+
+## M2: Mandate
+What I built: Created [`app/llm.py`](file:///c:/Users/Aakil/paypal/app/llm.py) as the single wrapper for Gemini SDK calls (using `response_schema` JSON output, one automatic retry, and deterministic mock fallbacks) containing all four prompt templates. Built [`app/mandate.py`](file:///c:/Users/Aakil/paypal/app/mandate.py) to parse plain-English shopping requests into editable drafts, automatically filling omitted limits (2x daily cap, `["thrift-shop"]`, 24-hour expiry) and listing every default in `assumptions`. Added `/api/mandates/parse`, `/api/mandates`, and `/api/mandates/active` to [`app/main.py`](file:///c:/Users/Aakil/paypal/app/main.py), recording `MANDATE_CONFIRMED` in the ledger upon confirmation.
+Why it matters for the project: Translates messy human instructions into explicit, verifiable spending limits that the user reviews and confirms before the agent is allowed to act.
+Terms learned:
+- *mandate* = a structured spending permission specifying what item keywords, dollar caps, allowed sellers, and expiry time a user confirmed.
+- *mock mode* = a deterministic offline mode that simulates AI or external APIs using predictable rules so the project works without live API keys.
+- *schema validation (Pydantic)* = checking that AI JSON output has the exact field names and number/string types our code expects before trusting it.
+- *assumptions* = default limits the parser filled in automatically when the user left them out, shown clearly so the user can edit them before confirming.
+How to try it: Run `.venv\Scripts\python.exe -m pytest tests/test_mandate.py -v` or `POST /api/mandates/parse` with `{"text": "get me a black jacket under $35"}`.
