@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import sqlite3
 from typing import Any
@@ -15,6 +16,7 @@ GENESIS_HASH = "GENESIS"
 ALLOWED_EVENT_TYPES = frozenset(
     {
         "MANDATE_CONFIRMED",
+        "MANDATE_REVOKED",
         "PURCHASE_DECIDED",
         "HUMAN_RESOLVED",
         "ORDER_CREATED",
@@ -29,7 +31,13 @@ ALLOWED_EVENT_TYPES = frozenset(
 
 def canonical_json(data: Any) -> str:
     """Serialize data with sorted keys and no whitespace for deterministic hashing."""
-    return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(
+        data,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
 
 
 def compute_entry_hash(
@@ -163,7 +171,7 @@ def verify(conn: sqlite3.Connection) -> dict[str, Any]:
         seq = int(row["seq"])
         checked += 1
 
-        if row["prev_hash"] != expected_prev:
+        if not hmac.compare_digest(str(row["prev_hash"]), expected_prev):
             return {
                 "ok": False,
                 "checked": checked,
@@ -173,7 +181,14 @@ def verify(conn: sqlite3.Connection) -> dict[str, Any]:
 
         try:
             body = json.loads(row["body_json"])
-        except json.JSONDecodeError:
+            expected_hash = compute_entry_hash(
+                row["prev_hash"],
+                row["type"],
+                row["ref_id"],
+                body,
+                row["ts"],
+            )
+        except (json.JSONDecodeError, ValueError, TypeError):
             return {
                 "ok": False,
                 "checked": checked,
@@ -181,14 +196,7 @@ def verify(conn: sqlite3.Connection) -> dict[str, Any]:
                 "head_hash": tail_hash,
             }
 
-        expected_hash = compute_entry_hash(
-            row["prev_hash"],
-            row["type"],
-            row["ref_id"],
-            body,
-            row["ts"],
-        )
-        if row["hash"] != expected_hash:
+        if not hmac.compare_digest(str(row["hash"]), expected_hash):
             return {
                 "ok": False,
                 "checked": checked,

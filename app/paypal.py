@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
+import threading
 import time
 import uuid
 from typing import Any
@@ -18,13 +20,31 @@ class PayPalError(RuntimeError):
     """Raised when a PayPal Sandbox request fails or credentials are missing."""
 
 
+_PAYPAL_ORDER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{3,64}$")
+
 # Simple in-process token cache keyed by (client_id, base_url)
 _TOKEN_CACHE: dict[tuple[str, str], tuple[str, float]] = {}
+_TOKEN_LOCK = threading.Lock()
 
 
 def clear_token_cache() -> None:
     """Reset cached OAuth tokens (useful in tests)."""
-    _TOKEN_CACHE.clear()
+    with _TOKEN_LOCK:
+        _TOKEN_CACHE.clear()
+
+
+def _invalidate_token(settings: Settings) -> None:
+    cache_key = (settings.paypal_client_id, settings.paypal_base_url)
+    with _TOKEN_LOCK:
+        _TOKEN_CACHE.pop(cache_key, None)
+
+
+def validate_paypal_order_id(paypal_order_id: str) -> str:
+    """Ensure PayPal order token contains only safe identifier characters."""
+    cleaned = paypal_order_id.strip()
+    if not _PAYPAL_ORDER_ID_RE.fullmatch(cleaned):
+        raise ValueError("Invalid PayPal order token format.")
+    return cleaned
 
 
 def _require_sandbox_credentials(settings: Settings) -> None:
@@ -58,10 +78,11 @@ def get_access_token(settings: Settings | None = None, http_client: httpx.Client
     _require_sandbox_credentials(cfg)
 
     cache_key = (cfg.paypal_client_id, cfg.paypal_base_url)
-    cached = _TOKEN_CACHE.get(cache_key)
-    now_mono = time.monotonic()
-    if cached is not None and now_mono < cached[1]:
-        return cached[0]
+    with _TOKEN_LOCK:
+        cached = _TOKEN_CACHE.get(cache_key)
+        now_mono = time.monotonic()
+        if cached is not None and now_mono < cached[1]:
+            return cached[0]
 
     url = f"{cfg.paypal_base_url}/v1/oauth2/token"
     try:
@@ -95,7 +116,8 @@ def get_access_token(settings: Settings | None = None, http_client: httpx.Client
     expires_in = int(data.get("expires_in", 300))
     # Refresh 60s before expiry (or immediately if short-lived)
     ttl = max(10, expires_in - 60)
-    _TOKEN_CACHE[cache_key] = (token, now_mono + ttl)
+    with _TOKEN_LOCK:
+        _TOKEN_CACHE[cache_key] = (token, time.monotonic() + ttl)
     return token
 
 
@@ -103,9 +125,49 @@ def _find_approval_link(links: list[dict[str, Any]]) -> str | None:
     """PayPal Orders v2 returns 'payer-action' (with payment_source) or 'approve'."""
     for target_rel in ("payer-action", "approve"):
         for link in links:
-            if link.get("rel") == target_rel and link.get("href"):
-                return str(link["href"])
+            href = link.get("href")
+            if link.get("rel") == target_rel and isinstance(href, str):
+                if href.startswith(("https://", "http://")):
+                    return href
     return None
+
+
+def _post_paypal_json(
+    settings: Settings,
+    path: str,
+    payload: dict[str, Any],
+    idempotency_key: str,
+    action_label: str,
+    http_client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    """POST JSON to PayPal Sandbox REST API with idempotency and single 401 token-refresh retry."""
+    url = f"{settings.paypal_base_url}{path}"
+    for attempt_idx in range(2):
+        token = get_access_token(settings, http_client=http_client)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "PayPal-Request-Id": idempotency_key,
+        }
+        try:
+            if http_client is not None:
+                resp = http_client.post(url, headers=headers, json=payload, timeout=20.0)
+            else:
+                with httpx.Client(timeout=20.0) as client:
+                    resp = client.post(url, headers=headers, json=payload)
+        except httpx.HTTPError as exc:
+            raise PayPalError(f"Network error {action_label}: {exc}") from exc
+
+        if resp.status_code == 401 and attempt_idx == 0:
+            _invalidate_token(settings)
+            continue
+
+        if resp.status_code >= 400:
+            raise PayPalError(_extract_paypal_error_message(resp))
+
+        return resp.json()
+
+    raise PayPalError(f"PayPal authorization failed while {action_label}.")
 
 
 def create_order_for_attempt(
@@ -134,7 +196,6 @@ def create_order_for_attempt(
         order_status = "CREATED"
         source = "mock"
     else:
-        token = get_access_token(settings, http_client=http_client)
         payload = {
             "intent": "CAPTURE",
             "purchase_units": [
@@ -160,25 +221,14 @@ def create_order_for_attempt(
                 }
             },
         }
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "PayPal-Request-Id": attempt_id,
-        }
-        url = f"{settings.paypal_base_url}/v2/checkout/orders"
-        try:
-            if http_client is not None:
-                resp = http_client.post(url, headers=headers, json=payload, timeout=20.0)
-            else:
-                with httpx.Client(timeout=20.0) as client:
-                    resp = client.post(url, headers=headers, json=payload)
-        except httpx.HTTPError as exc:
-            raise PayPalError(f"Network error creating PayPal order: {exc}") from exc
-
-        if resp.status_code >= 400:
-            raise PayPalError(_extract_paypal_error_message(resp))
-
-        data = resp.json()
+        data = _post_paypal_json(
+            settings,
+            path="/v2/checkout/orders",
+            payload=payload,
+            idempotency_key=attempt_id,
+            action_label="creating PayPal order",
+            http_client=http_client,
+        )
         paypal_order_id = str(data.get("id", ""))
         if not paypal_order_id:
             raise PayPalError("PayPal create-order response missing 'id'.")
@@ -239,51 +289,45 @@ def capture_order_by_paypal_id(
     http_client: httpx.Client | None = None,
 ) -> dict[str, Any]:
     """Capture an approved PayPal order (mock or sandbox) and log ORDER_CAPTURED."""
+    safe_token = validate_paypal_order_id(paypal_order_id)
     row = conn.execute(
         "SELECT * FROM orders WHERE paypal_order_id = ?",
-        (paypal_order_id,),
+        (safe_token,),
     ).fetchone()
     if row is None:
-        raise KeyError(f"Order with PayPal token '{paypal_order_id}' not found.")
+        raise KeyError(f"Order with PayPal token '{safe_token}' not found.")
 
     order = dict(row)
     if order["status"] == "COMPLETED" and order["capture_id"]:
         return order
+    if order["status"] == "CANCELLED":
+        raise PayPalError(f"Cannot capture cancelled PayPal order '{safe_token}'.")
 
     settings = get_settings()
     if order["source"] == "mock" or settings.paypal_mode == "mock":
-        capture_id = f"CAP-{paypal_order_id}"
+        capture_id = f"CAP-{safe_token}"
         new_status = "COMPLETED"
     else:
-        token = get_access_token(settings, http_client=http_client)
-        url = f"{settings.paypal_base_url}/v2/checkout/orders/{paypal_order_id}/capture"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "PayPal-Request-Id": f"{order['attempt_id']}-capture",
-        }
-        try:
-            if http_client is not None:
-                resp = http_client.post(url, headers=headers, json={}, timeout=20.0)
-            else:
-                with httpx.Client(timeout=20.0) as client:
-                    resp = client.post(url, headers=headers, json={})
-        except httpx.HTTPError as exc:
-            raise PayPalError(f"Network error capturing PayPal order: {exc}") from exc
-
-        if resp.status_code >= 400:
-            raise PayPalError(_extract_paypal_error_message(resp))
-
-        data = resp.json()
+        data = _post_paypal_json(
+            settings,
+            path=f"/v2/checkout/orders/{safe_token}/capture",
+            payload={},
+            idempotency_key=f"{order['attempt_id']}-capture",
+            action_label="capturing PayPal order",
+            http_client=http_client,
+        )
         new_status = str(data.get("status", "COMPLETED"))
         capture_id = None
         units = data.get("purchase_units") or []
         if units and isinstance(units[0], dict):
             captures = (units[0].get("payments") or {}).get("captures") or []
             if captures and isinstance(captures[0], dict):
+                cap_status = str(captures[0].get("status") or "").upper()
+                if cap_status in ("DECLINED", "FAILED"):
+                    raise PayPalError(f"PayPal capture failed with status '{cap_status}'.")
                 capture_id = captures[0].get("id")
         if not capture_id:
-            capture_id = f"CAP-{paypal_order_id}"
+            capture_id = f"CAP-{safe_token}"
 
     conn.execute(
         "UPDATE orders SET capture_id = ?, status = ? WHERE id = ?",
@@ -307,7 +351,7 @@ def capture_order_by_paypal_id(
         body={
             "order_id": order["id"],
             "attempt_id": order["attempt_id"],
-            "paypal_order_id": paypal_order_id,
+            "paypal_order_id": safe_token,
             "capture_id": capture_id,
             "status": new_status,
             "amount_usd": float(order["amount_usd"]),
@@ -320,9 +364,10 @@ def capture_order_by_paypal_id(
 
 def cancel_order_by_paypal_id(conn: sqlite3.Connection, paypal_order_id: str) -> dict[str, Any] | None:
     """Mark a pending order (CREATED or PAYER_ACTION_REQUIRED) as CANCELLED."""
+    safe_token = validate_paypal_order_id(paypal_order_id)
     row = conn.execute(
         "SELECT * FROM orders WHERE paypal_order_id = ?",
-        (paypal_order_id,),
+        (safe_token,),
     ).fetchone()
     if row is None:
         return None

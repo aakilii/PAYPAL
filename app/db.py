@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-import sqlite3
-import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
+import sqlite3
+import threading
+import uuid
 
 from app.config import get_settings
+
+_WRITE_LOCK = threading.RLock()
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS mandates (
@@ -104,6 +108,8 @@ def resolve_db_path(db_path: str | None = None) -> str:
 def get_connection(db_path: str | None = None) -> sqlite3.Connection:
     """Open a SQLite connection configured with Row factory, foreign keys, and busy timeout."""
     path = resolve_db_path(db_path)
+    if path != ":memory:":
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, timeout=10.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
@@ -112,29 +118,41 @@ def get_connection(db_path: str | None = None) -> sqlite3.Connection:
 
 
 @contextmanager
-def db_session(db_path: str | None = None) -> Iterator[sqlite3.Connection]:
-    """Context manager that commits on success, rolls back on error, and always closes."""
+def db_session(db_path: str | None = None, *, write: bool = False) -> Iterator[sqlite3.Connection]:
+    """Context manager that commits on success, rolls back on error, and always closes.
+
+    When write=True, acquires an in-process write lock and starts BEGIN IMMEDIATE so
+    hash-chain reads/appends and daily spend checks cannot race under concurrency.
+    """
+    if write:
+        _WRITE_LOCK.acquire()
     conn = get_connection(db_path)
     try:
+        if write and not conn.in_transaction:
+            conn.execute("BEGIN IMMEDIATE;")
         yield conn
         conn.commit()
     except Exception:
-        conn.rollback()
+        if conn.in_transaction:
+            conn.rollback()
         raise
     finally:
         conn.close()
+        if write:
+            _WRITE_LOCK.release()
 
 
 def init_db(db_path: str | None = None) -> None:
     """Create all tables and default settings if they do not exist yet."""
     path = resolve_db_path(db_path)
-    with db_session(path) as conn:
-        if path != ":memory:":
-            conn.execute("PRAGMA journal_mode = WAL;")
-        conn.executescript(SCHEMA_SQL)
-        conn.execute(
-            "INSERT OR IGNORE INTO settings (key, value) VALUES ('kill_switch', 'false')"
-        )
+    with _WRITE_LOCK:
+        with db_session(path) as conn:
+            if path != ":memory:":
+                conn.execute("PRAGMA journal_mode = WAL;")
+            conn.executescript(SCHEMA_SQL)
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('kill_switch', 'false')"
+            )
 
 
 def is_kill_switch_on(conn: sqlite3.Connection) -> bool:

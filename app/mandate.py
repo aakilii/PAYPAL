@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -21,6 +22,14 @@ DEFAULT_TTL_HOURS = 24.0
 class MandateParseRequest(BaseModel):
     text: str = Field(min_length=1, max_length=500)
 
+    @field_validator("text")
+    @classmethod
+    def strip_non_empty_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Shopping request text cannot be empty.")
+        return cleaned
+
 
 class MandateDraft(BaseModel):
     raw_text: str
@@ -35,12 +44,27 @@ class MandateDraft(BaseModel):
 
 class MandateConfirmRequest(BaseModel):
     raw_text: str = Field(min_length=1, max_length=500)
-    item_keywords: list[str] = Field(min_length=1)
-    max_item_usd: float = Field(gt=0.0)
-    max_day_usd: float = Field(gt=0.0)
-    allowed_sellers: list[str] = Field(min_length=1)
-    ttl_hours: float = Field(default=DEFAULT_TTL_HOURS, gt=0.0)
-    assumptions: list[str] = Field(default_factory=list)
+    item_keywords: list[str] = Field(min_length=1, max_length=25)
+    max_item_usd: float = Field(gt=0.0, le=100_000.0)
+    max_day_usd: float = Field(gt=0.0, le=1_000_000.0)
+    allowed_sellers: list[str] = Field(min_length=1, max_length=25)
+    ttl_hours: float = Field(default=DEFAULT_TTL_HOURS, gt=0.0, le=8760.0)
+    assumptions: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("raw_text")
+    @classmethod
+    def validate_raw_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("raw_text cannot be empty.")
+        return cleaned
+
+    @field_validator("max_item_usd", "max_day_usd", "ttl_hours")
+    @classmethod
+    def validate_finite_numbers(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("Numeric mandate fields must be finite.")
+        return round(float(value), 2)
 
     @field_validator("item_keywords", "allowed_sellers")
     @classmethod
@@ -219,3 +243,28 @@ def parse_iso_datetime(ts_str: str) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+def revoke_mandate(conn: sqlite3.Connection, mandate_id: str) -> dict[str, Any]:
+    """Revoke an active mandate and append MANDATE_REVOKED to the hash-chained ledger."""
+    mandate = get_mandate_by_id(conn, mandate_id)
+    if mandate is None:
+        raise KeyError(f"Mandate '{mandate_id}' not found.")
+    if mandate["status"] == "revoked":
+        raise ValueError(f"Mandate '{mandate_id}' is already revoked.")
+
+    conn.execute(
+        "UPDATE mandates SET status = 'revoked' WHERE id = ?",
+        (mandate_id,),
+    )
+    revoked_at = utc_now_iso()
+    append_event(
+        conn,
+        event_type="MANDATE_REVOKED",
+        ref_id=mandate_id,
+        body={"mandate_id": mandate_id, "revoked_at": revoked_at},
+        ts=revoked_at,
+    )
+    updated = get_mandate_by_id(conn, mandate_id)
+    assert updated is not None
+    return updated

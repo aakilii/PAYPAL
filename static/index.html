@@ -10,13 +10,34 @@
   <header class="app-header">
     <div class="header-inner">
       <div class="brand">
-        <h1>Mandate</h1>
-        <p>Agents can spend safely. Merchants can prove it.</p>
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-title-row">
+            <h1>Mandate</h1>
+            <span class="brand-pill">AI Spending Safety + PayPal Proof</span>
+          </div>
+          <p>Agents can spend safely. Merchants can prove it.</p>
+        </div>
       </div>
       <div class="header-controls">
-        <span id="badge-llm" class="badge">LLM: ...</span>
-        <span id="badge-paypal" class="badge">PayPal: ...</span>
-        <button id="btn-kill-switch" type="button" aria-pressed="false">Kill Switch: OFF</button>
+        <span class="badge-wrap">
+          <span id="badge-llm" class="badge">LLM: ...</span>
+          <button class="tip-btn" type="button" aria-label="About AI mode" data-tip="No Gemini API key is needed to run: in mock mode, Mandate uses deterministic parsing, heuristics, and templates. Add GEMINI_API_KEY + LLM_MODE=gemini in .env for live Gemini.">?</button>
+        </span>
+        <span class="badge-wrap">
+          <span id="badge-paypal" class="badge">PayPal: ...</span>
+          <button class="tip-btn" type="button" aria-label="About PayPal mode" data-tip="SANDBOX connects to PayPal's official test API using the Sandbox Merchant credentials in .env (fake money). Approving checkout asks for a Sandbox Personal buyer test login from developer.paypal.com.">?</button>
+        </span>
+        <span class="badge-wrap">
+          <span id="badge-ledger" class="badge badge-ok">Chain: Intact</span>
+          <button class="tip-btn" type="button" aria-label="About Audit Chain" data-tip="Every event hashes the previous row's SHA-256 digest starting at GENESIS. If any database row is modified out of band, this immediately flags TAMPERED.">?</button>
+        </span>
+        <button id="btn-kill-switch" type="button" aria-pressed="false" title="Immediately freeze all agent purchases">Kill Switch: OFF</button>
       </div>
     </div>
   </header>
@@ -26,84 +47,185 @@
   </div>
 
   <main class="container">
+    <div id="server-offline-banner" class="alert alert-danger hidden" role="alert">
+      <strong>Server Disconnected:</strong> Cannot reach <code>http://127.0.0.1:8000</code>. Start the backend with <code>uvicorn app.main:app --reload</code> and wait 2 seconds to reconnect.
+    </div>
+
     <div id="global-alert" class="alert hidden" role="status"></div>
 
+    <section id="judge-guide" class="guide-banner" aria-label="Interactive demo guide">
+      <div class="guide-top">
+        <div>
+          <strong>What is Mandate?</strong>
+          <span class="muted">
+            Shoppers set hard spending limits before an AI agent shops. Rules run in deterministic Python code—never in prompts—and every action logs to a SHA-256 ledger so merchants can defend PayPal disputes with proof.
+          </span>
+        </div>
+        <div class="guide-btn-row">
+          <button id="btn-start-tour" class="btn-primary btn-sm" type="button">Take 20s Tour</button>
+          <button id="btn-toggle-guide" class="btn-sm" type="button" aria-expanded="true">Hide guide</button>
+        </div>
+      </div>
+      <div id="guide-body">
+        <div class="guide-steps" id="guide-steps">
+          <div class="guide-step" data-step="mandate"><span class="guide-dot">1</span> Confirm Budget</div>
+          <div class="guide-step" data-step="normal"><span class="guide-dot">2</span> Safe Buy</div>
+          <div class="guide-step" data-step="protect"><span class="guide-dot">3</span> Block Attack / Hold</div>
+          <div class="guide-step" data-step="merchant"><span class="guide-dot">4</span> Merchant Proof</div>
+          <div class="guide-step" data-step="ledger"><span class="guide-dot">5</span> Verify &amp; Tamper</div>
+        </div>
+        <p id="guide-next-hint" class="guide-hint">
+          <strong>Start here:</strong> Click <em>Parse mandate</em> (or <em>1-Click Quick Setup</em>) below to give the AI agent a $35 jacket budget.
+        </p>
+      </div>
+    </section>
+
     <nav class="tabs" role="tablist" aria-label="Workspace sections">
-      <button id="tab-btn-shop" class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-shop" data-tab="shop">Shop</button>
+      <button id="tab-btn-shop" class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-shop" data-tab="shop">1. Shop &amp; Guard</button>
       <button id="tab-btn-approvals" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-approvals" data-tab="approvals">
-        Approvals <span id="holds-count" class="badge">0</span>
+        2. Approvals <span id="holds-count" class="badge">0</span>
       </button>
-      <button id="tab-btn-merchant" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-merchant" data-tab="merchant">Merchant</button>
-      <button id="tab-btn-ledger" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-ledger" data-tab="ledger">Ledger</button>
+      <button id="tab-btn-merchant" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-merchant" data-tab="merchant">3. Merchant &amp; Disputes</button>
+      <button id="tab-btn-ledger" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-ledger" data-tab="ledger">4. Audit Ledger</button>
     </nav>
 
     <!-- SHOP TAB -->
     <section id="panel-shop" role="tabpanel" aria-labelledby="tab-btn-shop">
       <div class="shop-layout">
-        <div>
-          <div class="card">
-            <h2>1. Create &amp; Confirm Mandate</h2>
-            <p class="muted">Tell the AI what you want to buy and your price limit. You review and confirm every limit before the agent can run.</p>
+        <div class="shop-main">
+          <div class="card" id="card-mandate">
+            <div class="card-head">
+              <span class="step-num">1</span>
+              <div class="card-head-text">
+                <div class="card-title-row">
+                  <h2>Set Spending Mandate (Your Guardrails)</h2>
+                  <button class="tip-btn" type="button" aria-label="Why set a mandate" data-tip="Instead of giving an AI agent unlimited card access, you review every assumed cap, trusted seller, and expiry before the agent is allowed to spend.">?</button>
+                </div>
+                <p class="muted">Describe what the AI can buy in plain English. Mandate flags every assumed rule so you approve exact caps before money can move.</p>
+              </div>
+            </div>
             <div class="input-row">
               <label for="mandate-input" class="hidden">What should the agent buy?</label>
-              <input id="mandate-input" class="input-grow" type="text" placeholder="What should the agent buy? e.g., get me a black jacket under $35" value="get me a black jacket under $35" />
+              <input id="mandate-input" class="input-grow" type="text" placeholder="e.g., get me a black jacket under $35" value="get me a black jacket under $35" />
               <button id="btn-parse-mandate" class="btn-primary" type="button">Parse mandate</button>
+              <button id="btn-quick-mandate" type="button" title="Parse and confirm the default $35 jacket mandate in one click">1-Click Quick Setup</button>
             </div>
 
-            <form id="draft-form" class="hidden">
+            <form id="draft-form" class="draft-panel hidden">
+              <div class="draft-panel-title">Review AI Draft &amp; Assumed Defaults</div>
               <div class="form-grid">
                 <div class="field">
-                  <label for="draft-keywords">Item keywords <span id="assumed-keywords" class="badge badge-warn hidden">Assumed</span></label>
+                  <label for="draft-keywords">Required item words <span id="assumed-keywords" class="badge badge-warn hidden">Assumed</span></label>
                   <input id="draft-keywords" type="text" required />
                 </div>
                 <div class="field">
                   <label for="draft-item-cap">Max per item ($) <span id="assumed-item-cap" class="badge badge-warn hidden">Assumed</span></label>
-                  <input id="draft-item-cap" type="number" step="0.01" min="0.01" required />
+                  <input id="draft-item-cap" type="number" step="0.01" min="0.01" max="100000" required />
                 </div>
                 <div class="field">
                   <label for="draft-day-cap">Max per day ($) <span id="assumed-day-cap" class="badge badge-warn hidden">Assumed</span></label>
-                  <input id="draft-day-cap" type="number" step="0.01" min="0.01" required />
+                  <input id="draft-day-cap" type="number" step="0.01" min="0.01" max="1000000" required />
                 </div>
                 <div class="field">
-                  <label for="draft-sellers">Allowed sellers <span id="assumed-sellers" class="badge badge-warn hidden">Assumed</span></label>
+                  <label for="draft-sellers">Trusted sellers <span id="assumed-sellers" class="badge badge-warn hidden">Assumed</span></label>
                   <input id="draft-sellers" type="text" required />
                 </div>
                 <div class="field">
-                  <label for="draft-ttl">Expiry (hours) <span id="assumed-ttl" class="badge badge-warn hidden">Assumed</span></label>
-                  <input id="draft-ttl" type="number" step="1" min="1" required />
+                  <label for="draft-ttl">Expires in (hours) <span id="assumed-ttl" class="badge badge-warn hidden">Assumed</span></label>
+                  <input id="draft-ttl" type="number" step="1" min="1" max="8760" required />
                 </div>
               </div>
-              <ul id="draft-assumptions" class="muted"></ul>
-              <button id="btn-confirm-mandate" class="btn-ok" type="submit">Confirm mandate</button>
+              <ul id="draft-assumptions" class="assumptions-list"></ul>
+              <div class="draft-actions">
+                <button id="btn-confirm-mandate" class="btn-ok" type="submit">Confirm mandate</button>
+              </div>
             </form>
 
             <div id="active-mandate-box" class="alert alert-ok hidden"></div>
           </div>
 
-          <div class="card">
-            <h2>2. Run Shopper Agent &amp; Guard</h2>
-            <p class="muted">The agent proposes only a <code>product_id</code>. Deterministic Guard code loads the real price and seller from our catalog.</p>
-            <div class="input-row">
+          <div class="card" id="card-guard">
+            <div class="card-head">
+              <span class="step-num">2</span>
+              <div class="card-head-text">
+                <div class="card-title-row">
+                  <h2>Test the Shopper Agent &amp; Deterministic Guard</h2>
+                  <button class="tip-btn" type="button" aria-label="How the Guard works" data-tip="The AI shopper proposes only a product ID. Our Python Guard ignores anything the AI believes and checks the real catalog price, daily spend, seller allowlist, and risk score.">?</button>
+                </div>
+                <p class="muted">Pick a scenario below. The AI proposes only a product ID; our code checks the real catalog price, seller trust, and hidden attacks.</p>
+              </div>
+            </div>
+
+            <div class="scenario-grid" aria-label="Demo scenarios">
+              <button id="btn-scen-normal" class="scenario-card scenario-ok" type="button">
+                <div class="scenario-top">
+                  <strong>Normal buy</strong>
+                  <span class="badge badge-ok">$24 &rarr; APPROVE</span>
+                </div>
+                <span class="scenario-desc">Black Denim Jacket from verified <code>thrift-shop</code>. Creates PayPal order.</span>
+              </button>
+
+              <button id="btn-scen-overcap" class="scenario-card scenario-danger" type="button">
+                <div class="scenario-top">
+                  <strong>Over the cap</strong>
+                  <span class="badge badge-danger">$48 &rarr; BLOCK</span>
+                </div>
+                <span class="scenario-desc">Black Leather Jacket exceeds your $35 item limit. Blocked in code.</span>
+              </button>
+
+              <button id="btn-scen-fake" class="scenario-card scenario-warn" type="button">
+                <div class="scenario-top">
+                  <strong>Fake seller</strong>
+                  <span class="badge badge-warn">$9 &rarr; HOLD</span>
+                </div>
+                <span class="scenario-desc">6-day unverified domain with urgency text (risk 0.85). Pauses in Approvals.</span>
+              </button>
+
+              <button id="btn-scen-injection" class="scenario-card scenario-attack" type="button">
+                <div class="scenario-top">
+                  <strong>Injection attack</strong>
+                  <span class="badge badge-danger">$199 &rarr; BLOCK</span>
+                </div>
+                <span class="scenario-desc">Hidden <code>SYSTEM NOTICE</code> tricks gullible AI; Guard still blocks it cold.</span>
+              </button>
+            </div>
+
+            <div class="custom-prompt-row">
               <label for="agent-request-input" class="hidden">Agent shopping prompt</label>
-              <input id="agent-request-input" class="input-grow" type="text" placeholder="What should the agent look for?" value="get me a black denim jacket" />
+              <input id="agent-request-input" class="input-grow" type="text" placeholder="Or type any custom shopping prompt..." value="get me a black denim jacket" />
               <button id="btn-run-agent" class="btn-primary" type="button">Run agent</button>
             </div>
-            <div class="btn-group" aria-label="Demo scenarios">
-              <button id="btn-scen-normal" type="button">Normal buy</button>
-              <button id="btn-scen-overcap" type="button">Over the cap</button>
-              <button id="btn-scen-fake" type="button">Fake seller</button>
-              <button id="btn-scen-injection" class="btn-danger" type="button">Injection attack</button>
-            </div>
+
+            <details id="catalog-drawer" class="catalog-drawer">
+              <summary>Inspect Storefront Catalog (see what prices &amp; traps the agent sees)</summary>
+              <div id="catalog-preview" class="catalog-preview">Loading catalog...</div>
+            </details>
+
             <div id="agent-result" class="hidden"></div>
           </div>
         </div>
 
-        <aside class="card" aria-label="Live activity feed">
-          <h3>Live Activity Feed</h3>
-          <p class="muted">Polls ledger events every 2 seconds.</p>
-          <ul id="activity-feed" class="activity-feed">
-            <li class="empty-state">No ledger events yet. Parse and confirm a mandate to start.</li>
-          </ul>
+        <aside class="shop-sidebar">
+          <div id="spend-meter-card" class="card spend-card hidden" aria-label="Daily spend meter">
+            <div class="spend-head">
+              <span class="spend-title">Daily Mandate Cap</span>
+              <span id="spend-meter-label" class="mono">$0.00 / $70.00</span>
+            </div>
+            <div class="meter-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="spend-meter-bar">
+              <div class="meter-fill" id="spend-meter-fill"></div>
+            </div>
+          </div>
+
+          <div class="card" aria-label="Live activity feed">
+            <div class="feed-head">
+              <h3>Live Audit Stream</h3>
+              <span class="live-pill"><span class="live-dot" aria-hidden="true"></span>Live</span>
+            </div>
+            <p class="muted feed-sub">Every decision appends to the SHA-256 ledger.</p>
+            <ul id="activity-feed" class="activity-feed">
+              <li class="empty-state">No ledger events yet. Confirm a mandate in Step 1 to begin.</li>
+            </ul>
+          </div>
         </aside>
       </div>
     </section>
@@ -111,10 +233,12 @@
     <!-- APPROVALS TAB -->
     <section id="panel-approvals" class="hidden" role="tabpanel" aria-labelledby="tab-btn-approvals">
       <div class="card">
-        <h2>Human-in-the-Loop Approvals</h2>
-        <p class="muted">Purchases from unknown sellers or with high risk scores pause here for your manual decision.</p>
+        <div class="tab-intro">
+          <h2>Human-in-the-Loop Approvals</h2>
+          <p class="muted">When a listing looks suspicious (new domain, unverified seller, urgency language, or risk &ge; 0.70), Mandate pauses checkout here until you manually <strong>Approve</strong> or <strong>Deny</strong>.</p>
+        </div>
         <div id="holds-list">
-          <div class="empty-state">No held purchases waiting for approval.</div>
+          <div class="empty-state">No held purchases yet. Run the <strong>Fake seller</strong> scenario on the Shop tab to see a purchase pause here.</div>
         </div>
       </div>
     </section>
@@ -122,26 +246,29 @@
     <!-- MERCHANT TAB -->
     <section id="panel-merchant" class="hidden" role="tabpanel" aria-labelledby="tab-btn-merchant">
       <div class="card">
-        <h2>Merchant Orders &amp; Mandate Proof</h2>
-        <p class="muted">Every order displays a <strong>Verified mandate</strong> badge only if the mandate was confirmed, the purchase was approved (or human-approved), and the ledger hash chain is intact.</p>
+        <div class="tab-intro">
+          <h2>Merchant Orders &amp; Mandate Proof</h2>
+          <p class="muted">A merchant sees a green <strong>Verified mandate</strong> badge only if (1) the shopper confirmed a mandate, (2) the Guard or human approved the purchase, and (3) the SHA-256 ledger chain is unbroken.</p>
+        </div>
         <div id="orders-list">
           <div class="empty-state">No orders created yet.</div>
         </div>
       </div>
 
       <div class="card">
-        <div class="header-inner" style="padding: 0; margin-bottom: 0.5rem;">
+        <div class="section-head">
           <div>
-            <h2 style="margin-bottom: 0.2rem;">Disputes &amp; Evidence Defender</h2>
-            <p class="muted" style="margin: 0;">Reads PayPal Sandbox disputes if present or lets you simulate one, then drafts a factual reply from ledger facts only.</p>
+            <h2>Disputes &amp; Evidence Defender</h2>
+            <p class="muted">Checks PayPal Sandbox disputes or simulates a customer claim ("I did not authorize this"), then drafts a factual reply using <em>only</em> verified ledger records.</p>
+            <div id="dispute-sync-note" class="muted sync-note hidden"></div>
           </div>
-          <div class="btn-group" style="margin: 0;">
+          <div class="btn-group">
             <button id="btn-sim-dispute" class="btn-primary" type="button">Simulate dispute</button>
             <button id="btn-sim-fake-dispute" type="button">Simulate unknown-order dispute</button>
           </div>
         </div>
         <div id="disputes-list">
-          <div class="empty-state">No disputes yet. Capture an order first or click "Simulate dispute".</div>
+          <div class="empty-state">No disputes yet. Complete a Normal buy first, then click "Simulate dispute".</div>
         </div>
       </div>
     </section>
@@ -149,10 +276,10 @@
     <!-- LEDGER TAB -->
     <section id="panel-ledger" class="hidden" role="tabpanel" aria-labelledby="tab-btn-ledger">
       <div class="card">
-        <div class="header-inner" style="padding: 0; margin-bottom: 0.75rem;">
+        <div class="section-head">
           <div>
-            <h2 style="margin-bottom: 0.2rem;">Tamper-Evident Audit Ledger</h2>
-            <p class="muted" style="margin: 0;">SHA-256 hash-chained events. Editing any past record breaks verification at that exact sequence number.</p>
+            <h2>Tamper-Evident Audit Ledger</h2>
+            <p class="muted">Each row hashes the previous row's SHA-256 digest starting at <code>GENESIS</code>. Click <strong>Tamper demo</strong> on any row to alter one database value and watch verification catch it.</p>
           </div>
           <button id="btn-verify-ledger" class="btn-primary" type="button">Verify chain</button>
         </div>
@@ -163,6 +290,21 @@
       </div>
     </section>
   </main>
+
+  <div id="tooltip-popover" class="tooltip-popover hidden" role="tooltip"></div>
+
+  <div id="tour-popover" class="tour-popover hidden" role="dialog" aria-labelledby="tour-title">
+    <div class="tour-header">
+      <span id="tour-step-count" class="badge badge-accent">Step 1 of 5</span>
+      <button id="tour-close-btn" class="btn-sm" type="button" aria-label="Close tour">&times;</button>
+    </div>
+    <h3 id="tour-title"></h3>
+    <p id="tour-body" class="muted"></p>
+    <div class="tour-footer">
+      <button id="tour-prev-btn" class="btn-sm" type="button">Back</button>
+      <button id="tour-next-btn" class="btn-primary btn-sm" type="button">Next</button>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

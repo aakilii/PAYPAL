@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 import os
 from pathlib import Path
+import re
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from starlette.responses import Response
 
 from app.agent import run as run_agent
 from app.catalog import get_product, list_public_catalog
 from app.config import get_settings
-from app.db import db_session, init_db, is_kill_switch_on, set_kill_switch_value
+from app.db import db_session, init_db, is_kill_switch_on, set_kill_switch_value, utc_now
 from app.defender import defend_dispute, list_disputes, simulate_dispute
-from app.guard import get_attempt_by_id, list_holds, resolve_hold
+from app.guard import _todays_approved_spend, get_attempt_by_id, list_holds, resolve_hold
 from app.ledger import append_event, dev_tamper_entry, list_events, verify
 from app.mandate import (
     MandateConfirmRequest,
@@ -27,6 +29,7 @@ from app.mandate import (
     get_active_mandate,
     get_mandate_by_id,
     parse_mandate_draft,
+    revoke_mandate,
 )
 from app.paypal import (
     PayPalError,
@@ -34,7 +37,10 @@ from app.paypal import (
     capture_order_by_paypal_id,
     create_order_for_attempt,
     record_paypal_error,
+    validate_paypal_order_id,
 )
+
+_SAFE_HOST_RE = re.compile(r"^[A-Za-z0-9.-]+(?::\d{1,5})?$")
 
 
 @asynccontextmanager
@@ -51,6 +57,26 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def add_security_headers(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
+    """Attach baseline HTTP security headers to all responses."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; "
+        "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
+    )
+    return response
+
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -87,17 +113,35 @@ def api_parse_mandate(payload: MandateParseRequest) -> dict[str, object]:
 @app.post("/api/mandates")
 def api_confirm_mandate(payload: MandateConfirmRequest) -> dict[str, object]:
     """Confirm and save a mandate, recording MANDATE_CONFIRMED in the ledger."""
-    with db_session() as conn:
+    with db_session(write=True) as conn:
         mandate = confirm_mandate(conn, payload)
     return {"mandate": mandate}
 
 
+@app.post("/api/mandates/{mandate_id}/revoke")
+def api_revoke_mandate(mandate_id: str) -> dict[str, object]:
+    """Revoke an active mandate and append MANDATE_REVOKED to the ledger."""
+    try:
+        with db_session(write=True) as conn:
+            mandate = revoke_mandate(conn, mandate_id)
+        return {"mandate": mandate}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/api/mandates/active")
 def api_get_active_mandate() -> dict[str, object]:
-    """Return the current active confirmed mandate, if one exists."""
+    """Return the current active confirmed mandate and today's approved spend."""
     with db_session() as conn:
         mandate = get_active_mandate(conn)
-    return {"mandate": mandate}
+        spent_today_usd = (
+            _todays_approved_spend(conn, str(mandate["id"]), utc_now())
+            if mandate is not None
+            else 0.0
+        )
+    return {"mandate": mandate, "spent_today_usd": spent_today_usd}
 
 
 @app.get("/api/catalog")
@@ -115,15 +159,20 @@ def api_get_holds(include_resolved: bool = False) -> dict[str, object]:
 
 
 def _resolve_callback_base_url(request: Request) -> str:
-    """Use configured APP_BASE_URL when non-local, or derive public host from reverse proxy headers."""
+    """Use configured APP_BASE_URL when non-local, or derive validated host from proxy headers."""
     configured = (os.getenv("APP_BASE_URL") or "").strip().rstrip("/")
     is_local_cfg = not configured or "127.0.0.1" in configured or "localhost" in configured
     if not is_local_cfg:
         return configured
 
     host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
-    proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "http").split(",")[0].strip()
-    if host and not host.startswith(("127.0.0.1", "localhost", "testserver")):
+    proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "http").split(",")[0].strip().lower()
+    if (
+        host
+        and proto in ("http", "https")
+        and _SAFE_HOST_RE.fullmatch(host)
+        and not host.startswith(("127.0.0.1", "localhost", "testserver"))
+    ):
         return f"{proto}://{host}".rstrip("/")
     return get_settings().app_base_url
 
@@ -135,14 +184,14 @@ def _try_create_order_for_attempt(
     """Create a PayPal order safely; on failure roll back partial order and log PAYPAL_ERROR."""
     attempt_id = str(attempt["id"])
     try:
-        with db_session() as conn:
+        with db_session(write=True) as conn:
             order = create_order_for_attempt(conn, attempt, base_url_override=base_url_override)
             refreshed = get_attempt_by_id(conn, attempt_id)
             if refreshed is not None:
                 attempt.update(refreshed)
         return order, None
     except PayPalError as exc:
-        with db_session() as err_conn:
+        with db_session(write=True) as err_conn:
             record_paypal_error(err_conn, attempt_id, str(exc))
         return None, str(exc)
 
@@ -151,7 +200,7 @@ def _try_create_order_for_attempt(
 def api_approve_hold(attempt_id: str, request: Request) -> dict[str, object]:
     """Human-in-the-loop approval of a HELD purchase attempt."""
     try:
-        with db_session() as conn:
+        with db_session(write=True) as conn:
             attempt = resolve_hold(conn, attempt_id, "approved")
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -166,7 +215,7 @@ def api_approve_hold(attempt_id: str, request: Request) -> dict[str, object]:
 def api_deny_hold(attempt_id: str) -> dict[str, object]:
     """Human-in-the-loop denial of a HELD purchase attempt."""
     try:
-        with db_session() as conn:
+        with db_session(write=True) as conn:
             attempt = resolve_hold(conn, attempt_id, "denied")
         return {"attempt": attempt}
     except KeyError as exc:
@@ -176,9 +225,17 @@ def api_deny_hold(attempt_id: str) -> dict[str, object]:
 
 
 class AgentRunRequest(BaseModel):
-    mandate_id: str = Field(min_length=1)
+    mandate_id: str = Field(min_length=1, max_length=64)
     request_text: str = Field(min_length=1, max_length=500)
     attack: str = Field(default="none")
+
+    @field_validator("mandate_id", "request_text")
+    @classmethod
+    def strip_non_empty(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Field cannot be empty.")
+        return cleaned
 
 
 class KillSwitchRequest(BaseModel):
@@ -191,6 +248,8 @@ def _summarize_event(event: dict[str, object]) -> str:
     b = body if isinstance(body, dict) else {}
     if etype == "MANDATE_CONFIRMED":
         return f"Mandate confirmed (cap ${b.get('max_item_usd', '?')}/item, keywords {b.get('item_keywords', [])})."
+    if etype == "MANDATE_REVOKED":
+        return f"Mandate {b.get('mandate_id', '?')} revoked by user."
     if etype == "PURCHASE_DECIDED":
         prod = b.get("product_snapshot") if isinstance(b.get("product_snapshot"), dict) else {}
         return f"Guard {b.get('decision', '?')}: {prod.get('title', b.get('product_id', '?'))} (${prod.get('price_usd', '?')}) {b.get('reason_codes', [])}"
@@ -215,7 +274,7 @@ def _summarize_event(event: dict[str, object]) -> str:
 def api_agent_run(payload: AgentRunRequest, request: Request) -> dict[str, object]:
     """Have the shopper agent propose a product and run it through the Guard."""
     try:
-        with db_session() as conn:
+        with db_session(write=True) as conn:
             result = run_agent(
                 conn,
                 mandate_id=payload.mandate_id,
@@ -242,14 +301,17 @@ def paypal_return(token: str = "", PayerID: str = "") -> RedirectResponse:
     if not token:
         raise HTTPException(status_code=400, detail="Missing PayPal order token.")
     try:
-        with db_session() as conn:
-            order = capture_order_by_paypal_id(conn, token)
+        safe_token = validate_paypal_order_id(token)
+        with db_session(write=True) as conn:
+            order = capture_order_by_paypal_id(conn, safe_token)
         return RedirectResponse(url=f"/?tab=merchant&captured={order['id']}", status_code=303)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PayPalError as exc:
-        with db_session() as err_conn:
-            record_paypal_error(err_conn, token, str(exc))
+        with db_session(write=True) as err_conn:
+            record_paypal_error(err_conn, token[:64], str(exc))
         return RedirectResponse(url=f"/?tab=merchant&paypal_error={quote(str(exc))}", status_code=303)
 
 
@@ -257,8 +319,12 @@ def paypal_return(token: str = "", PayerID: str = "") -> RedirectResponse:
 def paypal_cancel(token: str = "") -> RedirectResponse:
     """Handle PayPal buyer cancellation redirect cleanly."""
     if token:
-        with db_session() as conn:
-            cancel_order_by_paypal_id(conn, token)
+        try:
+            safe_token = validate_paypal_order_id(token)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        with db_session(write=True) as conn:
+            cancel_order_by_paypal_id(conn, safe_token)
     return RedirectResponse(url="/?tab=shop&paypal_cancelled=1", status_code=303)
 
 
@@ -301,14 +367,22 @@ def api_get_orders() -> dict[str, object]:
 
 
 class DisputeSimulateRequest(BaseModel):
-    order_id: str = Field(min_length=1)
+    order_id: str = Field(min_length=1, max_length=64)
     claim: str = Field(default="I did not authorize this AI purchase.", min_length=1, max_length=400)
+
+    @field_validator("order_id", "claim")
+    @classmethod
+    def strip_non_empty_dispute(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Field cannot be empty.")
+        return cleaned
 
 
 @app.post("/api/disputes/simulate")
 def api_simulate_dispute(payload: DisputeSimulateRequest) -> dict[str, object]:
     """Create a simulated PayPal-shaped dispute and log DISPUTE_RECEIVED."""
-    with db_session() as conn:
+    with db_session(write=True) as conn:
         dispute = simulate_dispute(conn, order_id=payload.order_id, claim=payload.claim)
     return {"dispute": dispute}
 
@@ -316,7 +390,7 @@ def api_simulate_dispute(payload: DisputeSimulateRequest) -> dict[str, object]:
 @app.get("/api/disputes")
 def api_get_disputes(sync_paypal: bool = False) -> dict[str, object]:
     """Return disputes, optionally checking PayPal Sandbox Customer Disputes API."""
-    with db_session() as conn:
+    with db_session(write=sync_paypal) as conn:
         disputes, sync_note = list_disputes(conn, sync_paypal=sync_paypal)
     return {"disputes": disputes, "sync_note": sync_note}
 
@@ -325,7 +399,7 @@ def api_get_disputes(sync_paypal: bool = False) -> dict[str, object]:
 def api_defend_dispute(dispute_id: str) -> dict[str, object]:
     """Build ledger-only evidence packet and draft factual merchant defense reply."""
     try:
-        with db_session() as conn:
+        with db_session(write=True) as conn:
             dispute = defend_dispute(conn, dispute_id)
         return {"dispute": dispute}
     except KeyError as exc:
@@ -342,7 +416,7 @@ def api_get_kill_switch() -> dict[str, bool]:
 @app.post("/api/kill-switch")
 def api_set_kill_switch(payload: KillSwitchRequest) -> dict[str, bool]:
     """Freeze or unfreeze the agent and log KILL_SWITCH_CHANGED in the ledger."""
-    with db_session() as conn:
+    with db_session(write=True) as conn:
         set_kill_switch_value(conn, payload.enabled)
         append_event(
             conn,
@@ -396,7 +470,7 @@ def api_verify_ledger() -> dict[str, object]:
 def api_dev_tamper(seq: int) -> dict[str, object]:
     """DEV_MODE ONLY: mutate one stored entry so the UI can demonstrate tamper detection."""
     try:
-        with db_session() as conn:
+        with db_session(write=True) as conn:
             result = dev_tamper_entry(conn, seq)
             verification = verify(conn)
         return {**result, "verification": verification}
